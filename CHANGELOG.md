@@ -7,6 +7,14 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（版本跳号为预期行为）。
 
+## [0.8.0-beta.1] - 2026-08-09
+
+### 修复
+
+- **发布流水线**：PyPI / npm 发布切换为 Trusted Publishing（OIDC，免 token）；
+  npm 发布加 `--access public` 与版本已存在跳过；修复 provenance 校验
+  （package.json 补 `repository` 字段）
+
 ## [0.8.0-beta] - 2026-08-09
 
 ### 新增
