@@ -262,3 +262,5 @@ jobs:
             npm publish --ignore-scripts --provenance --access public
           fi
         working-directory: sdk/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
