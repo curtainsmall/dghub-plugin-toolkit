@@ -14,6 +14,7 @@ import os
 import queue
 import sys
 import threading
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 from typing import Any, Callable
@@ -35,6 +36,47 @@ def plugin_root(plugin_dir: Path | None = None) -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(sys._getframe(1).f_code.co_filename).resolve().parent
+
+
+def manifest_dir(explicit: Path | str | None = None) -> Path:
+    """manifest 目录三档解析（与 TS SDK ``manifestDir`` 对齐）。
+
+    显式参数（相对以调用者文件目录为基准）→ ``DGHUB_MANIFEST_DIR`` env
+    （注入约定绝对路径，resolve 兜底）→ 插件根 ``plugin_root()``。
+    """
+    if explicit is not None:
+        p = Path(explicit)
+        if not p.is_absolute():
+            caller_file = sys._getframe(1).f_code.co_filename
+            p = (Path(caller_file).resolve().parent / p).resolve()
+        return p
+    env_dir = os.environ.get("DGHUB_MANIFEST_DIR")
+    if env_dir:
+        return Path(env_dir).resolve()
+    return plugin_root()
+
+
+@dataclass(frozen=True)
+class EnvConfig:
+    """DGHub 连接环境变量（与 TS SDK ``envConfig`` 对齐）。"""
+
+    host: str
+    port: int
+    token: str
+
+
+def env_config() -> EnvConfig:
+    """读取 DGHub 连接环境变量（默认值同 TS SDK：localhost:8000）。"""
+    return EnvConfig(
+        host=os.environ.get("DGHUB_HOST", "localhost"),
+        port=int(os.environ.get("DGHUB_PORT", "8000")),
+        token=os.environ.get("DGHUB_TOKEN", ""),
+    )
+
+
+# Agent.__init__ 参数名与模块级函数同名（公共 API 不可改名），
+# 内部引用经此别名避免遮蔽
+_resolve_manifest_dir = manifest_dir
 
 
 class Agent:
@@ -79,18 +121,7 @@ class Agent:
             on_ping: 收到服务端 ping 时调用，传入时间戳。
         """
         # --- 解析 manifest 目录（显式 → DGHUB_MANIFEST_DIR → 插件根） ---
-        if manifest_dir is not None:
-            self._manifest_dir = Path(manifest_dir)
-            if not self._manifest_dir.is_absolute():
-                caller_file = sys._getframe(1).f_code.co_filename
-                self._manifest_dir = (Path(caller_file).resolve().parent
-                                     / self._manifest_dir).resolve()
-        elif env_manifest := os.environ.get("DGHUB_MANIFEST_DIR"):
-            # 注入约定绝对路径（Packer 调试），resolve 兜底——不做 caller 相对解析
-            self._manifest_dir = Path(env_manifest).resolve()
-        else:
-            # 无显式无 env：直接用插件根（plugin_root()：env → frozen exe → caller）
-            self._manifest_dir = plugin_root()
+        self._manifest_dir = _resolve_manifest_dir(manifest_dir)
 
         self._max_retries = max_retries
         self._send_timeout = send_timeout
@@ -486,14 +517,13 @@ class Agent:
 
         self._plugin_id = self._manifest.get("id", "")
 
-        # ---- 环境变量 ----
-        host = os.environ.get("DGHUB_HOST", "localhost")
-        port = os.environ.get("DGHUB_PORT", "8000")
-        self._token = os.environ.get("DGHUB_TOKEN", "")
+        # ---- 环境变量（经 env_config() 统一读取） ----
+        cfg = env_config()
+        self._token = cfg.token
         if not self._token:
             raise ValueError("DGHUB_TOKEN environment variable is not set")
 
-        url = f"ws://{host}:{port}/ws/plugin?token={self._token}"
+        url = f"ws://{cfg.host}:{cfg.port}/ws/plugin?token={self._token}"
 
         # ---- 带重试的连接 ----
         for attempt in range(self._max_retries + 1):
