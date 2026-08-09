@@ -120,7 +120,7 @@ jobs:
 
       - name: Build SDK package
         run: |
-          python build_sdk.py
+          python build.py
         env:
           CI_VERSION_TAG: ${{ github.ref_name }}
         working-directory: sdk/python
@@ -148,19 +148,26 @@ jobs:
         run: npm ci
         working-directory: sdk/typescript
 
-      - name: Build
-        run: npm run build
+      - name: Build (inject version + tsc, keep version for publish)
+        run: |
+          python build.py
+        env:
+          CI_VERSION_TAG: ${{ github.ref_name }}
+          KEEP_VERSION: "1"
         working-directory: sdk/typescript
 
       - name: Test
         run: npm test
         working-directory: sdk/typescript
 
-      - name: Upload dist
+      - name: Upload package (dist + manifest)
         uses: actions/upload-artifact@v4
         with:
           name: dghub-sdk-ts-${{ github.ref_name }}
-          path: sdk/typescript/dist/*
+          path: |
+            sdk/typescript/dist
+            sdk/typescript/package.json
+            sdk/typescript/README.md
 
   release:
     needs: [detect-changes, build-packer, build-sdk-py, build-sdk-ts]
@@ -223,36 +230,35 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true  # 重放同 tag：已发布文件跳过（PyPI 不可变）
 
   publish-npm:
     needs: [detect-changes, build-sdk-ts]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - name: Download TS SDK dist
+      - name: Download TS SDK package (dist + manifest)
         uses: actions/download-artifact@v4
         with:
           name: dghub-sdk-ts-${{ github.ref_name }}
-          path: sdk/typescript/dist
+          path: sdk/typescript
 
-      - name: Set version from tag
+      - name: Configure npm registry auth
         run: |
-          VER="${GITHUB_REF_NAME#v}"
-          npm version --no-git-tag-version "$VER"
+          npm config set "//registry.npmjs.org/:_authToken" "${NODE_AUTH_TOKEN}"
         working-directory: sdk/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_API_TOKEN }}
 
       - name: Publish to npm
         # dist 已由 build-sdk-ts 构建并下载；跳过 prepublishOnly（避免无 node_modules 的 tsc）
         run: npm publish --ignore-scripts --provenance
         working-directory: sdk/typescript
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_API_TOKEN }}
