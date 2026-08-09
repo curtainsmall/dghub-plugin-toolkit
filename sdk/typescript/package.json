@@ -27,7 +27,7 @@
   ],
   "license": "AGPL-3.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.6"
   },
   "dependencies": {
     "ws": "^8.18.0"
