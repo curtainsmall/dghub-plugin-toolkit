@@ -102,7 +102,7 @@ jobs:
 
   build-sdk-py:
     needs: detect-changes
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -133,7 +133,7 @@ jobs:
 
   build-sdk-ts:
     needs: detect-changes
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout

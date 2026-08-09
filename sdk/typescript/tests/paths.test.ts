@@ -4,9 +4,16 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isAbsolute } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 
 import { pluginRoot, manifestDir, envConfig } from "../dist/paths.js";
+
+/** 创建平台原生唯一临时目录（对齐 Python `tmp_path` 语义）。 */
+async function makeTmp(): Promise<string> {
+  return mkdtemp(join(tmpdir(), "dghub-sdk-test-"));
+}
 
 test("envConfig 默认值", () => {
   const saved = { ...process.env };
@@ -42,13 +49,14 @@ test("pluginRoot 显式参数原样返回", () => {
   assert.equal(pluginRoot("D:/x/y"), "D:/x/y");
 });
 
-test("pluginRoot 优先环境变量（resolve 兜底）", () => {
+test("pluginRoot 优先环境变量（resolve 兜底）", async () => {
   const saved = { ...process.env };
-  process.env.DGHUB_PLUGIN_ROOT = "C:/plugins/myplugin";
+  const dir = await makeTmp();
+  process.env.DGHUB_PLUGIN_ROOT = dir;
   try {
     const root = pluginRoot();
     assert.ok(isAbsolute(root));
-    assert.ok(root.replace(/\\/g, "/").startsWith("C:/plugins/myplugin"));
+    assert.equal(root, resolve(dir));
   } finally {
     delete process.env.DGHUB_PLUGIN_ROOT;
     Object.assign(process.env, saved);
@@ -67,12 +75,12 @@ test("pluginRoot 进程内缓存（显式参数不受缓存影响）", () => {
   }
 });
 
-test("manifestDir 环境变量注入", () => {
+test("manifestDir 环境变量注入", async () => {
   const saved = { ...process.env };
-  process.env.DGHUB_MANIFEST_DIR = "C:/plugins/myplugin/.dghub-sdk";
+  const dir = await makeTmp();
+  process.env.DGHUB_MANIFEST_DIR = dir;
   try {
-    assert.ok(manifestDir().replace(/\\/g, "/")
-      .startsWith("C:/plugins/myplugin/.dghub-sdk"));
+    assert.equal(manifestDir(), resolve(dir));
   } finally {
     delete process.env.DGHUB_MANIFEST_DIR;
     Object.assign(process.env, saved);
@@ -91,12 +99,13 @@ test("manifestDir 显式相对路径以调用者目录为基准", () => {
   }
 });
 
-test("manifestDir 显式绝对路径原样返回", () => {
+test("manifestDir 显式绝对路径原样返回", async () => {
   const saved = { ...process.env };
   delete process.env.DGHUB_MANIFEST_DIR;
   try {
+    const dir = await makeTmp();
     // 显式参数原样返回（对齐 Python：不解析不校验）
-    assert.equal(manifestDir("C:/abs/dir"), "C:/abs/dir");
+    assert.equal(manifestDir(dir), dir);
   } finally {
     Object.assign(process.env, saved);
   }
