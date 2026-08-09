@@ -46,3 +46,4 @@ output/
 
 # Re-ignore local project state
 .dghub-sdk/
+sdk/**/build/

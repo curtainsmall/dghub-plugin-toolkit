@@ -1,10 +1,10 @@
 """Build DGHub TypeScript SDK package from git tag.
 
 Usage:
-    python build.py [--version X.Y.Z]
+    python build_sdk.py [--version X.Y.Z]
     # CI 会自动传入 CI_VERSION_TAG 环境变量
 
-构建流程（与 sdk/python/build.py 对齐）：
+构建流程（与 sdk/python/build_sdk.py 对齐）：
   1. 读取 v* tag 提取版本号（或用 --version 强制指定）
   2. 注入 package.json version（构建后恢复原值）
   3. npm run build（tsc 编译 src → dist）
