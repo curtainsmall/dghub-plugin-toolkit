@@ -23,6 +23,7 @@ from backend.build_control import Canceller
 from backend.py_compiler import build_plugin_exe
 from backend.logbus import Logger
 from backend.winflags import _NO_WINDOW
+from backend.builder import BuilderItem
 
 
 @dataclass
@@ -113,7 +114,7 @@ class Compiler:
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Path | None = None) -> list[dict[str, Any]] | None:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         """检查设置是否足以推导 Builder 条目；返回建议条目或 None。
 
         ``source_dir`` 供需要读清单（如入口字段）的编译使用，可选。
@@ -168,7 +169,7 @@ class CommandCompiler(Compiler):
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Path | None = None) -> list[dict[str, Any]] | None:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         return None
 
     def run(self, ctx: CompilerContext) -> bool:
@@ -260,7 +261,7 @@ class PythonCompiler(Compiler):
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Path | None = None) -> list[dict[str, Any]] | None:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         """manifest 已选 → 推导编译产物条目（显式声明，derived 只读）。
 
         - 入口 exe（<插件名>.exe，entry 标签）
@@ -272,9 +273,9 @@ class PythonCompiler(Compiler):
         if not plugin_name:
             return None
         return [
-            {"path": f"{plugin_name}.exe", "tags": ["entry"],
-             "derived": True},
-            {"dir": "_internal", "derived": True},
+            BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
+                        derived=True),
+            BuilderItem(dir="_internal", derived=True),
         ]
 
     def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:
@@ -463,14 +464,14 @@ class NodeCompiler(Compiler):
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Path | None = None) -> list[dict[str, Any]] | None:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         """manifest 已选 → 推导产物条目：SEA exe + node_modules + 入口目录。"""
         if not cfg.get("manifest") or not plugin_name:
             return None
-        items: list[dict[str, Any]] = [
-            {"path": f"{plugin_name}.exe", "tags": ["entry"],
-             "derived": True},
-            {"dir": "node_modules", "derived": True},
+        items: list[BuilderItem] = [
+            BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
+                        derived=True),
+            BuilderItem(dir="node_modules", derived=True),
         ]
         # 入口所在目录（dist / src …）随产物收集；入口在根则只收入口文件
         if source_dir is not None:
@@ -478,9 +479,9 @@ class NodeCompiler(Compiler):
                 source_dir / str(cfg.get("manifest", "")))
             entry_dir = str(Path(entry).parent) if entry else ""
             if entry_dir not in ("", "."):
-                items.append({"dir": entry_dir, "derived": True})
+                items.append(BuilderItem(dir=entry_dir, derived=True))
             elif entry:
-                items.append({"path": entry, "derived": True})
+                items.append(BuilderItem(path=entry, derived=True))
         return items
 
     def debug_source_command(self, plugin_dir: Path) -> list[str] | None:

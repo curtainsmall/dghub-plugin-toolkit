@@ -116,7 +116,7 @@ def locate_debug_entry(ctx, artifact: Path) -> Path | None:
         exe = artifact / f"{ctx.plugin_name}.exe"
         return exe if exe.is_file() else None
     item = ctx.builder.entry_item()
-    if item is not None and "path" in item:
-        p = artifact / item["path"]
+    if item is not None and item.path is not None:
+        p = artifact / item.path
         return p if p.exists() else None
     return None

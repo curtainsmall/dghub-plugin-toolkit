@@ -380,19 +380,13 @@ class App(ctk.CTk):
             # 「入口必须是单个文件」→ 定位到该入口条目行
             if any("入口必须是单个文件" in m for m in errors):
                 it = ctx.builder.entry_item()
-                if it:
-                    key = next((k for k in ("path", "dir", "pattern")
-                                if k in it), "")
-                    if key:
-                        rels.add(it[key])
+                if it is not None and it.path is not None:
+                    rels.add(it.path)
             # 「入口条目重复」→ 高亮所有 entry 条目行
             if any("入口条目重复" in m for m in errors):
                 for it in ctx.builder.items():
-                    if "entry" in it.get("tags", []):
-                        key = next((k for k in ("path", "dir", "pattern")
-                                    if k in it), "")
-                        if key:
-                            rels.add(it[key])
+                    if "entry" in it.tags and it.path is not None:
+                        rels.add(it.path)
             if rels:
                 self._dist_view.mark_errors(rels)
             # 区域级错误（如打包内容为空 / 缺少入口）→ 容器红框 + 提示

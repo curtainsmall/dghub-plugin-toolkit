@@ -278,10 +278,10 @@ class BuildTab(ctk.CTkFrame):
             return
         workdir = Path(self._plugin_dir or ".")
         for i, item in enumerate(b.items()):
-            kind = ("path" if "path" in item
-                    else ("dir" if "dir" in item else "pattern"))
-            rel = item.get(kind, "")
-            tags = item.get("tags", [])
+            kind = next((k for k in ("path", "dir", "pattern")
+                        if getattr(item, k, None) is not None), "pattern")
+            rel = getattr(item, kind, "")
+            tags = item.tags
             is_entry = "entry" in tags
 
             # 卡片式行（斑马纹交替底色 + 圆角）
@@ -307,7 +307,7 @@ class BuildTab(ctk.CTkFrame):
                              fg_color=kbg, text_color=kfg,
                              corner_radius=4).pack(side="left")
             is_error = rel in self._error_rels
-            is_derived = bool(item.get("derived"))
+            is_derived = bool(item.derived)
             if is_derived:
                 # 编译产物：显示相对插件目录的路径（输出目录/.pyi/<插件名>/...）
                 out_rel = (b.get_output_dir() or "output").rstrip("/\\")
@@ -416,8 +416,8 @@ class BuildTab(ctk.CTkFrame):
             # 保持 entry 唯一：新标签为 entry 时，清除其他条目的 entry
             if "entry" in new_tags:
                 for i, item in enumerate(b.items()):
-                    if i != idx and "entry" in item.get("tags", []):
-                        b.set_tags(i, [t for t in item.get("tags", [])
+                    if i != idx and "entry" in item.tags:
+                        b.set_tags(i, [t for t in item.tags
                                        if t != "entry"])
             b.set_tags(idx, new_tags)
         self.clear_errors()  # 内容已变，清除旧错误高亮
@@ -442,10 +442,10 @@ class BuildTab(ctk.CTkFrame):
         except Exception:
             pass
 
-        kind = ("path" if "path" in item
-                else "dir" if "dir" in item else "pattern")
-        rel = item.get(kind, "")
-        tags = item.get("tags", [])
+        kind = next((k for k in ("path", "dir", "pattern")
+                    if getattr(item, k, None) is not None), "pattern")
+        rel = getattr(item, kind, "")
+        tags = item.tags
         base = Path(self._plugin_dir or ".")
         is_file = (kind == "path")
         pending: list[str | None] = [None]  # 重选后的相对路径
@@ -626,10 +626,10 @@ class BuildTab(ctk.CTkFrame):
         workdir = Path(self._plugin_dir or ".")
         if b is not None:
             for item in b.items():
-                kind = ("path" if "path" in item
-                        else ("dir" if "dir" in item else "pattern"))
-                rel = item.get(kind, "")
-                is_entry = "entry" in item.get("tags", [])
+                kind = next((k for k in ("path", "dir", "pattern")
+                            if getattr(item, k, None) is not None), "pattern")
+                rel = getattr(item, kind, "")
+                is_entry = "entry" in item.tags
                 if kind == "pattern" and workdir.is_dir():
                     matched = evaluate_pattern(workdir, rel)
                     names = [Path(m).name for m in matched[:10]]
@@ -638,7 +638,7 @@ class BuildTab(ctk.CTkFrame):
                     tree.append(
                         f"    ├── {rel}（规则）→ {', '.join(names)} {extra}")
                 else:
-                    mark = " ← 编译产物" if item.get("derived") \
+                    mark = " ← 编译产物" if item.derived \
                         else (" ← 入口" if is_entry else "")
                     shown = rel if kind != "dir" else rel.rstrip("/\\") + "/"
                     tree.append(f"    ├── {shown}{mark}")

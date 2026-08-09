@@ -125,11 +125,11 @@ def test_builder_items_and_tags(make_project):
     b.add_dir("assets")
     b.add_rule("dist/**")
     items = b.items()
-    assert items[0] == {"path": "main.exe", "tags": ["entry"]}
-    assert items[1] == {"dir": "assets"}
-    assert items[2] == {"pattern": "dist/**"}
+    assert items[0].to_dict() == {"path": "main.exe", "tags": ["entry"]}
+    assert items[1].to_dict() == {"dir": "assets"}
+    assert items[2].to_dict() == {"pattern": "dist/**"}
     b.set_tags(1, ["entry"])
-    assert "entry" in b.items()[1]["tags"]
+    assert "entry" in b.items()[1].tags
     b.remove_item(1)
     assert len(b.items()) == 2
 
@@ -210,7 +210,8 @@ def test_python_compiler_probe(tmp_path):
 
 def test_python_compiler_deduce(make_project):
     py = get_compiler("python")
-    assert py.deduce({"manifest": "pyproject.toml"}, "my-plugin") == [
+    assert [i.to_dict() for i in py.deduce(
+        {"manifest": "pyproject.toml"}, "my-plugin")] == [
         {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
         {"dir": "_internal", "derived": True}]
     assert py.deduce({"manifest": ""}, "my-plugin") is None
@@ -289,9 +290,9 @@ def test_fill_builder_only_fills_empty(make_project, make_ctx):
     # 编译产物条目：exe（入口）+ _internal/（derived）
     items = b.items()
     assert len(items) == 2
-    assert items[0] == {"path": "testplugin.exe", "tags": ["entry"],
-                        "derived": True}
-    assert items[1] == {"dir": "_internal", "derived": True}
+    assert items[0].to_dict() == {"path": "testplugin.exe", "tags": ["entry"],
+                                  "derived": True}
+    assert items[1].to_dict() == {"dir": "_internal", "derived": True}
     # 再次 fill 不重复添加
     fill_builder(ctx)
     assert len(b.items()) == 2

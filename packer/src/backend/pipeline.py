@@ -80,18 +80,18 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
 
     # 2) deduce：建议编译产物条目（只填空——已存在 entry 条目不重复添加）
     items = ctx.builder.items()
-    has_entry = any("entry" in it.get("tags", []) for it in items)
+    has_entry = any("entry" in it.tags for it in items)
     deduced = comp.deduce(ctx.compile_cfg, ctx.plugin_name, ctx.source_dir)
     if deduced and not has_entry:
         for item in deduced:
-            if "path" in item:
-                ctx.builder.add_file(item["path"], item.get("tags"),
-                                     derived=bool(item.get("derived")))
-                applied.append(f"添加打包内容: {item['path']}（入口）")
-            elif "dir" in item:
-                ctx.builder.add_dir(item["dir"], item.get("tags"),
-                                    derived=bool(item.get("derived")))
-                applied.append(f"添加打包内容: {item['dir']}（编译产物）")
+            if item.path is not None:
+                ctx.builder.add_file(item.path, item.tags,
+                                     derived=item.derived)
+                applied.append(f"添加打包内容: {item.path}（入口）")
+            elif item.dir is not None:
+                ctx.builder.add_dir(item.dir, item.tags,
+                                    derived=item.derived)
+                applied.append(f"添加打包内容: {item.dir}（编译产物）")
 
     return applied
 
@@ -140,10 +140,10 @@ def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Path | None:
                           or ctx.compile_cfg.get("manifest")),
         prod_dir=prod_dir)
 
-    # manifest：entry = entry 标签条目的 arc（validate 已保证恰好一个）
+    # manifest 的 entry = entry 标签条目的 arc（validate 已保证恰好一个）
     entry_item = ctx.builder.entry_item()
-    assert entry_item is not None and "path" in entry_item
-    entry_arc = entry_item["path"]
+    assert entry_item is not None and entry_item.path is not None
+    entry_arc = entry_item.path
 
     # 入口产物兜底校验：entry 文件可能由编译阶段产出（不在 source_dir），
     # 收集完成后必须实际存在（产物树或打包内容之一提供）
