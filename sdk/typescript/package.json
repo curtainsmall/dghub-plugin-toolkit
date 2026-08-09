@@ -1,6 +1,5 @@
 {
   "name": "dghub-sdk",
-  "version": "0.1.0",
   "description": "DGHub SDK for TypeScript/Node.js — feature-parity with the Python SDK (Agent, codec, enums)",
   "repository": {
     "type": "git",
