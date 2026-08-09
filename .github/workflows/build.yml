@@ -1,4 +1,4 @@
-name: Build and Release
+ï»¿name: Build and Release
 
 on:
   push:
@@ -200,7 +200,7 @@ jobs:
         id: sdknote
         shell: bash
         run: |
-          echo "note=dghub-sdk ¸üÐÂ£º\`pip install -U dghub-sdk\` / \`npm install dghub-sdk\`¡£" >> "$GITHUB_OUTPUT"
+          echo "note=dghub-sdk ï¿½ï¿½ï¿½Â£ï¿½\`pip install -U dghub-sdk\` / \`npm install dghub-sdk\`ï¿½ï¿½" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -227,10 +227,10 @@ jobs:
           path: dist
 
       - name: Publish to PyPI
-        # Trusted Publishing£¨OIDC£©£ºÎÞÐè token£¬PyPI ²àÒÑÅäÖÃÊÚÈ¨±¾²Ö¿â
+        # Trusted Publishingï¿½ï¿½OIDCï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ tokenï¿½ï¿½PyPI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¨ï¿½ï¿½ï¿½Ö¿ï¿½
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          skip-existing: true  # ÖØ·ÅÍ¬ tag£ºÒÑ·¢²¼ÎÄ¼þÌø¹ý£¨PyPI ²»¿É±ä£©
+          skip-existing: true  # ï¿½Ø·ï¿½Í¬ tagï¿½ï¿½ï¿½Ñ·ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½PyPI ï¿½ï¿½ï¿½É±ä£©
 
   publish-npm:
     needs: [detect-changes, build-sdk-ts]
@@ -250,15 +250,17 @@ jobs:
           path: sdk/typescript
 
       - name: Publish to npm
-        # Trusted Publishing (OIDC) ¡ª npmjs.com ²àÒÑÊÚÈ¨±¾²Ö¿â
-        # dist ÒÑÓÉ build-sdk-ts ¹¹½¨²¢ÏÂÔØ£»Ìø¹ý prepublishOnly£¨±ÜÃâÎÞ node_modules µÄ tsc£©
-        # --access public£ºÊ×´Î·¢²¼ÐÂ°ü±ØÐëÏÔÊ½¹«¿ª£¨provenance ½öÖ§³Ö public£©
-        # °æ±¾ÒÑ´æÔÚ£¨ÖØ·ÅÍ¬ tag£©Ê±Ìø¹ý
+        # Trusted Publishing (OIDC) ï¿½ï¿½ npmjs.com ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¨ï¿½ï¿½ï¿½Ö¿ï¿½
+        # dist ï¿½ï¿½ï¿½ï¿½ build-sdk-ts ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø£ï¿½ï¿½ï¿½ï¿½ï¿½ prepublishOnlyï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ node_modules ï¿½ï¿½ tscï¿½ï¿½
+        # --access publicï¿½ï¿½ï¿½×´Î·ï¿½ï¿½ï¿½ï¿½Â°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½provenance ï¿½ï¿½Ö§ï¿½ï¿½ publicï¿½ï¿½
+        # ï¿½æ±¾ï¿½Ñ´ï¿½ï¿½Ú£ï¿½ï¿½Ø·ï¿½Í¬ tagï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½
         run: |
           VER=$(node -p "require('./package.json').version")
           if npm view "dghub-sdk@$VER" version >/dev/null 2>&1; then
-            echo "dghub-sdk@$VER ÒÑ·¢²¼£¬Ìø¹ý"
+            echo "dghub-sdk@$VER ï¿½Ñ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
           else
-            npm publish --ignore-scripts --access public
+            TAG=latest
+            [[ "$VER" == *-* ]] && TAG=beta
+            npm publish --ignore-scripts --access public --tag "$TAG"
           fi
         working-directory: sdk/typescript
