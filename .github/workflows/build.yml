@@ -250,10 +250,10 @@ jobs:
           path: sdk/typescript
 
       - name: Publish to npm
+        # Trusted Publishing (OIDC) — npmjs.com 侧已授权本仓库
         # dist 已由 build-sdk-ts 构建并下载；跳过 prepublishOnly（避免无 node_modules 的 tsc）
         # --access public：首次发布新包必须显式公开（provenance 仅支持 public）
         # 版本已存在（重放同 tag）时跳过
-        # 注：0.8.0-beta 首版用 token 创建，OIDC/Trusted Publisher 无法更新已有包——暂用 token
         run: |
           VER=$(node -p "require('./package.json').version")
           if npm view "dghub-sdk@$VER" version >/dev/null 2>&1; then
@@ -263,4 +263,4 @@ jobs:
           fi
         working-directory: sdk/typescript
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_API_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
