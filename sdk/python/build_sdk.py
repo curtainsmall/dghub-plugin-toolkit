@@ -7,7 +7,7 @@ Usage:
 构建流程：
   1. 读取 v* tag 提取版本号（或用 --version 强制指定）
   2. 替换 pyproject.toml 中的占位版本
-  3. python -m build 生成 wheel + sdist
+  3. pip wheel 生成 wheel（本脚本与 `build` 模块同名，不能用 `python -m build`）
   4. 恢复 pyproject.toml 占位版本
 """
 
