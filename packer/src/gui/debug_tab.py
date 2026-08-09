@@ -229,7 +229,8 @@ class DebugTab(ctk.CTkFrame):
 
     def _detect_clicked(self) -> None:
         self._detecting = True
-        self._detect_hint.configure(text="检测中...")
+        self._detect_hint.configure(text="检测中...",
+                                    text_color=("#B8860B", "#E6B84B"))
         threading.Thread(target=self._detect_work, daemon=True).start()
 
     def _detect_work(self) -> None:

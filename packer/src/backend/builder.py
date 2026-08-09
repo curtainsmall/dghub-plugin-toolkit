@@ -148,8 +148,12 @@ class Builder:
             self._save(files)
 
     def items(self) -> list[BuilderItem]:
-        """条目列表（path / dir / pattern 三选一 + tags / derived）。"""
-        return list(self._files())
+        """条目列表：编译产物（derived）优先显示，其余保持添加顺序。
+
+        稳定排序——derived 条目组内保持原顺序；交互索引与显示一致。
+        """
+        return sorted(self._files(),
+                      key=lambda it: it.derived, reverse=True)
 
     # ------------------------------------------------------------------
     # 发布选项
