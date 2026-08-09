@@ -1,4 +1,4 @@
-﻿"""Build tab — 打包内容与发布选项（纯 GUI 工具的单视图构建页）。
+"""Build tab — 打包内容与发布选项（纯 GUI 工具的单视图构建页）。
 
 - 打包内容：统一文件选择列表（文件 / 目录 / 规则三种条目，标签标记入口）
   +「添加文件」/「添加目录」（常规系统选择器）+「添加规则」+「从编译填充」
@@ -7,7 +7,7 @@
 
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import customtkinter as ctk
 
@@ -36,12 +36,12 @@ class BuildTab(ctk.CTkFrame):
     """构建页：项目根 / 入口 / 打包内容 / 发布选项 / 预览。"""
 
     def __init__(self, master: Any,
-                 on_fill_builder: Optional[Callable[[], None]] = None,
-                 on_error_cleared: Optional[Callable[[], None]] = None,
+                 on_fill_builder: Callable[[], None] | None = None,
+                 on_error_cleared: Callable[[], None] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
-        self._pm: Optional[ProjectManager] = None
-        self._plugin_dir: Optional[str] = None
+        self._pm: ProjectManager | None = None
+        self._plugin_dir: str | None = None
         self._loading = False
         self._enabled = False
         self._on_fill_builder = on_fill_builder
@@ -169,7 +169,7 @@ class BuildTab(ctk.CTkFrame):
     # 打包内容（统一文件列表，标签标记入口）
     # ------------------------------------------------------------------
 
-    def _builder(self) -> Optional[Builder]:
+    def _builder(self) -> Builder | None:
         return Builder(self._pm) if self._pm else None
 
     def _add_files(self) -> None:
@@ -218,7 +218,7 @@ class BuildTab(ctk.CTkFrame):
         self._refresh_item_list()
         self._refresh_preview()
 
-    def _rel_to_source(self, path: str) -> Optional[str]:
+    def _rel_to_source(self, path: str) -> str | None:
         """绝对路径 → 相对项目根的 posix 路径；不在项目根内返回 None。"""
         base = Path(self._plugin_dir or ".")
         try:
@@ -424,8 +424,8 @@ class BuildTab(ctk.CTkFrame):
         self._refresh_item_list()
         self._refresh_preview()
 
-    def _ask_item_detail(self, item: dict) -> Optional[tuple[Optional[str],
-                                                             list[str]]]:
+    def _ask_item_detail(self, item: dict) -> tuple[str | None,
+                                                             list[str]] | None:
         """条目详情对话框：完整路径 + 重选按钮 + 标签下拉。
 
         返回 (重选后的相对路径或 None, 新标签)；取消返回 None。
@@ -448,7 +448,7 @@ class BuildTab(ctk.CTkFrame):
         tags = item.get("tags", [])
         base = Path(self._plugin_dir or ".")
         is_file = (kind == "path")
-        pending: list[Optional[str]] = [None]  # 重选后的相对路径
+        pending: list[str | None] = [None]  # 重选后的相对路径
         result: list = []
 
         def _display(path: Path) -> str:
@@ -543,7 +543,7 @@ class BuildTab(ctk.CTkFrame):
             self._refresh_item_list()
             self._refresh_preview()
 
-    def get_builder(self) -> Optional[Builder]:
+    def get_builder(self) -> Builder | None:
         return self._builder()
 
     # ------------------------------------------------------------------
@@ -556,7 +556,7 @@ class BuildTab(ctk.CTkFrame):
         self.save_settings()
         self._refresh_preview()
 
-    def set_plugin_dir(self, d: str, pm: Optional[ProjectManager] = None) -> None:
+    def set_plugin_dir(self, d: str, pm: ProjectManager | None = None) -> None:
         if pm:
             self._pm = pm
         self._plugin_dir = d

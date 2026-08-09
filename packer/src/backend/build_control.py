@@ -11,7 +11,6 @@ from __future__ import annotations
 import os
 import subprocess
 import threading
-from typing import Optional
 
 from backend.winflags import _NO_WINDOW
 
@@ -21,14 +20,14 @@ class Canceller:
 
     def __init__(self) -> None:
         self._event = threading.Event()
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
 
     @property
     def cancelled(self) -> bool:
         return self._event.is_set()
 
-    def set_proc(self, proc: Optional[subprocess.Popen]) -> None:
+    def set_proc(self, proc: subprocess.Popen | None) -> None:
         """登记/注销当前子进程；若取消已先行发生，登记时立即杀掉。"""
         with self._lock:
             self._proc = proc

@@ -1,4 +1,4 @@
-﻿"""Compile tab — compile 编译选择与设置（下拉单选 + 字段联动）。
+"""Compile tab — compile 编译选择与设置（下拉单选 + 字段联动）。
 
 编译由 ``compile_system`` 字段显式单选：""（无）/ "python" / "node" / "command"。
 选中后显示对应设置字段；一切语言相关解析（清单识别、[tool.dghub].entry）
@@ -9,7 +9,7 @@ import subprocess
 import threading
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import customtkinter as ctk
 
@@ -27,11 +27,11 @@ class CompileTab(ctk.CTkFrame):
     """编译页：下拉单选 + 对应设置字段（Python / Command / 无）。"""
 
     def __init__(self, master: Any,
-                 on_changed: Optional[Callable[[], None]] = None,
+                 on_changed: Callable[[], None] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
-        self._pm: Optional[ProjectManager] = None
-        self._plugin_dir: Optional[str] = None
+        self._pm: ProjectManager | None = None
+        self._plugin_dir: str | None = None
         self._loading = False
         self._on_changed = on_changed
         self._controls: list[ctk.CTkBaseClass] = []
@@ -332,7 +332,7 @@ class CompileTab(ctk.CTkFrame):
         if self._on_changed:
             self._on_changed()
 
-    def set_plugin_dir(self, d: str, pm: Optional[ProjectManager] = None) -> None:
+    def set_plugin_dir(self, d: str, pm: ProjectManager | None = None) -> None:
         if pm:
             self._pm = pm
         self._plugin_dir = d

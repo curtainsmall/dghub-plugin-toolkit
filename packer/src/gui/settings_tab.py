@@ -4,7 +4,7 @@ import os
 import threading
 import webbrowser
 from tkinter import messagebox
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import customtkinter as ctk
 
@@ -51,7 +51,7 @@ class SettingsTab(ctk.CTkFrame):
     _DEFAULT_PORT = "8000"
 
     def __init__(self, master: Any,
-                 on_pypi_index_changed: Optional[Callable[[str], None]] = None,
+                 on_pypi_index_changed: Callable[[str], None] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
         self._on_pypi_index_changed = on_pypi_index_changed

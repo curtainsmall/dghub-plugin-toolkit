@@ -11,7 +11,7 @@
 import os
 import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import customtkinter as ctk
 
@@ -37,17 +37,17 @@ class DebugTab(ctk.CTkFrame):
     """调试页：模式选择 + 环境变量 + 启动/停止 + 状态行。"""
 
     def __init__(self, master: Any, logger: Logger,
-                 on_state_change: Optional[Any] = None,
+                 on_state_change: Any | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
-        self._pm: Optional[ProjectManager] = None
-        self._plugin_dir: Optional[str] = None
+        self._pm: ProjectManager | None = None
+        self._plugin_dir: str | None = None
         self._logger = logger
         self._on_state_change = on_state_change  # 运行状态变化回调（锁定互斥）
         self._controls: list[ctk.CTkBaseClass] = []
         self._enabled = False
         self._running = False
-        self._canceller: Optional[Canceller] = None
+        self._canceller: Canceller | None = None
 
         # 状态变量
         self._mode_var = ctk.StringVar(value="调试源码")
@@ -379,7 +379,7 @@ class DebugTab(ctk.CTkFrame):
     # 外部钩子
     # ------------------------------------------------------------------
 
-    def set_plugin_dir(self, d: str, pm: Optional[ProjectManager] = None) -> None:
+    def set_plugin_dir(self, d: str, pm: ProjectManager | None = None) -> None:
         if pm:
             self._pm = pm
         self._plugin_dir = d

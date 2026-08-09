@@ -1,6 +1,6 @@
 """GUI 共享组件：跨 tab 复用的小部件与样式辅助（消除重复定义）。"""
 
-from typing import Any, Optional
+from typing import Any
 
 import customtkinter as ctk
 
@@ -11,7 +11,7 @@ class ToolTip:
     def __init__(self, widget: Any, text: str) -> None:
         self._widget = widget
         self._text = text
-        self._tip: Optional[Any] = None
+        self._tip: Any | None = None
         widget.bind("<Enter>", self._show)
         widget.bind("<Leave>", self._hide)
 

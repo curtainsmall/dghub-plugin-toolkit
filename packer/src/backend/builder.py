@@ -11,7 +11,7 @@ Builder 完全独立：只消费 builder.files 与发布选项，不引用编译
 """
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.project_manager import ProjectManager
 
@@ -51,28 +51,28 @@ class Builder:
         self._pm.write_builder_files(files)
 
     def add_file(self, rel: str,
-                 tags: Optional[list[str]] = None,
+                 tags: list[str] | None = None,
                  derived: bool = False) -> None:
         files = self._files()
         files.append(self._entry(rel, "path", tags, derived))
         self._save(files)
 
     def add_dir(self, rel: str,
-                tags: Optional[list[str]] = None,
+                tags: list[str] | None = None,
                 derived: bool = False) -> None:
         files = self._files()
         files.append(self._entry(rel, "dir", tags, derived))
         self._save(files)
 
     def add_rule(self, pattern: str,
-                 tags: Optional[list[str]] = None) -> None:
+                 tags: list[str] | None = None) -> None:
         files = self._files()
         files.append(self._entry(pattern, "pattern", tags))
         self._save(files)
 
     @staticmethod
     def _entry(rel: str, kind: str,
-               tags: Optional[list[str]],
+               tags: list[str] | None,
                derived: bool = False) -> dict[str, Any]:
         item: dict[str, Any] = {kind: rel}
         if tags:
@@ -158,7 +158,7 @@ class Builder:
             return ["入口必须是单个文件（目录/规则不能作为入口）"]
         return []
 
-    def entry_item(self) -> Optional[dict[str, Any]]:
+    def entry_item(self) -> dict[str, Any] | None:
         """返回带 entry 标签的条目（validate 已保证恰好一个）。"""
         for item in self.items():
             if "entry" in item.get("tags", []):
@@ -171,7 +171,7 @@ class Builder:
 
     def resolve(self, source_dir: Path,
                 entry_exempt: bool = True,
-                prod_dir: Optional[Path] = None) -> list[tuple[Path, str]]:
+                prod_dir: Path | None = None) -> list[tuple[Path, str]]:
         """条目 → [(源文件, 包内相对路径)]。
 
         ``entry_exempt=True``（有编译时）：入口文件可能由编译阶段产出，

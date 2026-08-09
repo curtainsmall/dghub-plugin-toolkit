@@ -9,7 +9,7 @@ BuildContext 由 GUI 组装（app.py），本模块不接触前端。经 ctx.log
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.builder import BuildError, Builder
 from backend.build_control import Canceller
@@ -34,9 +34,9 @@ class BuildContext:
     compile_system: str        # ""（无）/ "python" / "command"
     builder: Builder
     log: Logger
-    pm: Optional[ProjectManager] = None
+    pm: ProjectManager | None = None
     pypi_index: str = ""
-    canceller: Optional[Canceller] = None
+    canceller: Canceller | None = None
     # 编译设置字段（compile_system 相关，由 app.py 从 project.json 读取）
     compile_cfg: dict[str, Any] = field(default_factory=dict)
     # 调试构建：保留 .deps / cache（PyInstaller 增量缓存前提）
@@ -52,7 +52,7 @@ def validate(ctx: BuildContext) -> list[str]:
     return errors
 
 
-def fill_builder(ctx: BuildContext) -> Optional[list[str]]:
+def fill_builder(ctx: BuildContext) -> list[str] | None:
     """「从编译填充」：probe + deduce 串联，只填空。
 
     将建议落盘（编译设置字段 / Builder 条目），
@@ -96,7 +96,7 @@ def fill_builder(ctx: BuildContext) -> Optional[list[str]]:
     return applied
 
 
-def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Optional[Path]:
+def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Path | None:
     """执行两阶段构建并打包，返回产物路径；失败返回 None。
 
     校验失败（BuildError 语义）时返回 None，错误经 ctx.log 记录；
