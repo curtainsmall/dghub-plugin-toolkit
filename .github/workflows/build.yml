@@ -259,7 +259,7 @@ jobs:
           if npm view "dghub-sdk@$VER" version >/dev/null 2>&1; then
             echo "dghub-sdk@$VER 已发布，跳过"
           else
-            npm publish --access public
+            npm publish --ignore-scripts --access public
           fi
         working-directory: sdk/typescript
         env:
