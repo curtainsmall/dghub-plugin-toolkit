@@ -1,4 +1,4 @@
-ï»¿name: Build and Release
+name: Build and Release
 
 on:
   push:
@@ -142,7 +142,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Install deps
         run: npm ci
@@ -200,7 +200,7 @@ jobs:
         id: sdknote
         shell: bash
         run: |
-          echo "note=dghub-sdk æ›´æ–°ï¼š\`pip install -U dghub-sdk\` / \`npm install dghub-sdk\`ã€‚" >> "$GITHUB_OUTPUT"
+          echo "note=dghub-sdk ¸üĞÂ£º\`pip install -U dghub-sdk\` / \`npm install dghub-sdk\`¡£" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -227,10 +227,10 @@ jobs:
           path: dist
 
       - name: Publish to PyPI
-        # Trusted Publishingï¼ˆOIDCï¼‰ï¼šæ— éœ€ tokenï¼ŒPyPI ä¾§å·²é…ç½®æˆæƒæœ¬ä»“åº“
+        # Trusted Publishing£¨OIDC£©£ºÎŞĞè token£¬PyPI ²àÒÑÅäÖÃÊÚÈ¨±¾²Ö¿â
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          skip-existing: true  # é‡æ”¾åŒ tagï¼šå·²å‘å¸ƒæ–‡ä»¶è·³è¿‡ï¼ˆPyPI ä¸å¯å˜ï¼‰
+          skip-existing: true  # ÖØ·ÅÍ¬ tag£ºÒÑ·¢²¼ÎÄ¼şÌø¹ı£¨PyPI ²»¿É±ä£©
 
   publish-npm:
     needs: [detect-changes, build-sdk-ts]
@@ -240,7 +240,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Download TS SDK package (dist + manifest)
@@ -250,14 +250,14 @@ jobs:
           path: sdk/typescript
 
       - name: Publish to npm
-        # Trusted Publishing (OIDC) â€” npmjs.com ä¾§å·²æˆæƒæœ¬ä»“åº“
-        # dist å·²ç”± build-sdk-ts æ„å»ºå¹¶ä¸‹è½½ï¼›è·³è¿‡ prepublishOnlyï¼ˆé¿å…æ—  node_modules çš„ tscï¼‰
-        # --access publicï¼šé¦–æ¬¡å‘å¸ƒæ–°åŒ…å¿…é¡»æ˜¾å¼å…¬å¼€ï¼ˆprovenance ä»…æ”¯æŒ publicï¼‰
-        # ç‰ˆæœ¬å·²å­˜åœ¨ï¼ˆé‡æ”¾åŒ tagï¼‰æ—¶è·³è¿‡
+        # Trusted Publishing (OIDC) ¡ª npmjs.com ²àÒÑÊÚÈ¨±¾²Ö¿â
+        # dist ÒÑÓÉ build-sdk-ts ¹¹½¨²¢ÏÂÔØ£»Ìø¹ı prepublishOnly£¨±ÜÃâÎŞ node_modules µÄ tsc£©
+        # --access public£ºÊ×´Î·¢²¼ĞÂ°ü±ØĞëÏÔÊ½¹«¿ª£¨provenance ½öÖ§³Ö public£©
+        # °æ±¾ÒÑ´æÔÚ£¨ÖØ·ÅÍ¬ tag£©Ê±Ìø¹ı
         run: |
           VER=$(node -p "require('./package.json').version")
           if npm view "dghub-sdk@$VER" version >/dev/null 2>&1; then
-            echo "dghub-sdk@$VER å·²å‘å¸ƒï¼Œè·³è¿‡"
+            echo "dghub-sdk@$VER ÒÑ·¢²¼£¬Ìø¹ı"
           else
             npm publish --ignore-scripts --access public
           fi
