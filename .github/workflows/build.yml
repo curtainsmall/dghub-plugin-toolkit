@@ -227,9 +227,9 @@ jobs:
           path: dist
 
       - name: Publish to PyPI
+        # Trusted Publishing（OIDC）：无需 token，PyPI 侧已配置授权本仓库
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true  # 重放同 tag：已发布文件跳过（PyPI 不可变）
 
   publish-npm:
@@ -249,14 +249,8 @@ jobs:
           name: dghub-sdk-ts-${{ github.ref_name }}
           path: sdk/typescript
 
-      - name: Configure npm registry auth
-        run: |
-          npm config set "//registry.npmjs.org/:_authToken" "${NODE_AUTH_TOKEN}"
-        working-directory: sdk/typescript
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_API_TOKEN }}
-
       - name: Publish to npm
+        # Trusted Publishing（OIDC）：无需 token，npm 侧已配置授权本仓库
         # dist 已由 build-sdk-ts 构建并下载；跳过 prepublishOnly（避免无 node_modules 的 tsc）
         # --access public：首次发布新包必须显式公开（provenance 仅支持 public）
         # 版本已存在（重放同 tag）时跳过——npm 无 skip-existing，发布前自查
@@ -268,5 +262,3 @@ jobs:
             npm publish --ignore-scripts --provenance --access public
           fi
         working-directory: sdk/typescript
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_API_TOKEN }}
