@@ -251,7 +251,8 @@ jobs:
         working-directory: sdk/typescript
 
       - name: Publish to npm
-        run: npm publish --provenance
+        # dist 已由 build-sdk-ts 构建并下载；跳过 prepublishOnly（避免无 node_modules 的 tsc）
+        run: npm publish --ignore-scripts --provenance
         working-directory: sdk/typescript
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

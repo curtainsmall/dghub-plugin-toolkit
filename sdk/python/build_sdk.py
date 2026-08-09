@@ -64,7 +64,7 @@ def _patch_version(version: str) -> None:
         content, count=1, flags=re.MULTILINE,
     )
     PYPROJECT.write_text(content, encoding="utf-8")
-    print(f"  Patched pyproject.toml → version = {version}")
+    print(f"  Patched pyproject.toml -> version = {version}")
 
 
 def _to_pep440(version: str) -> str:
@@ -72,14 +72,14 @@ def _to_pep440(version: str) -> str:
     if "-" not in version:
         return version
     base, rest = version.split("-", 1)
-    if rest.startswith("alpha."):
-        return f"{base}a{rest[6:]}"
-    if rest.startswith("beta."):
-        return f"{base}b{rest[5:]}"
-    if rest.startswith("rc."):
-        return f"{base}rc{rest[3:]}"
-    if rest.startswith("dev."):
-        return f"{base}.dev{rest[4:]}"
+    if rest.startswith("alpha"):
+        return f"{base}a{rest[len('alpha'):].lstrip('.')}"
+    if rest.startswith("beta"):
+        return f"{base}b{rest[len('beta'):].lstrip('.')}"
+    if rest.startswith("rc"):
+        return f"{base}rc{rest[len('rc'):].lstrip('.')}"
+    if rest.startswith("dev"):
+        return f"{base}.dev{rest[len('dev'):].lstrip('.')}"
     return version  # unknown pattern, leave as-is
 
 
@@ -92,7 +92,7 @@ def _restore_version() -> None:
         content, count=1, flags=re.MULTILINE,
     )
     PYPROJECT.write_text(content, encoding="utf-8")
-    print("  Restored pyproject.toml → version = 0.0.0")
+    print("  Restored pyproject.toml -> version = 0.0.0")
 
 
 def _build() -> int:
