@@ -200,7 +200,7 @@ jobs:
         id: sdknote
         shell: bash
         run: |
-          echo "note=dghub-sdk ���£�\`pip install -U dghub-sdk\` / \`npm install dghub-sdk\`��" >> "$GITHUB_OUTPUT"
+          echo "note=dghub-sdk 更新：\`pip install -U dghub-sdk\` / \`npm install dghub-sdk\`。" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -227,10 +227,10 @@ jobs:
           path: dist
 
       - name: Publish to PyPI
-        # Trusted Publishing��OIDC�������� token��PyPI ����������Ȩ���ֿ�
+        # Trusted Publishing（OIDC）：无需 token，PyPI 侧已配置授权本仓库
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          skip-existing: true  # �ط�ͬ tag���ѷ����ļ�������PyPI ���ɱ䣩
+          skip-existing: true  # 重放同 tag：已发布文件跳过（PyPI 不可变）
 
   publish-npm:
     needs: [detect-changes, build-sdk-ts]
@@ -250,14 +250,14 @@ jobs:
           path: sdk/typescript
 
       - name: Publish to npm
-        # Trusted Publishing (OIDC) �� npmjs.com ������Ȩ���ֿ�
-        # dist ���� build-sdk-ts ���������أ����� prepublishOnly�������� node_modules �� tsc��
-        # --access public���״η����°�������ʽ������provenance ��֧�� public��
-        # �汾�Ѵ��ڣ��ط�ͬ tag��ʱ����
+        # Trusted Publishing (OIDC) — npmjs.com 侧已授权本仓库
+        # dist 已由 build-sdk-ts 构建并下载；跳过 prepublishOnly（避免无 node_modules 的 tsc）
+        # --access public：首次发布新包必须显式公开（provenance 仅支持 public）
+        # 版本已存在（重放同 tag）时跳过
         run: |
           VER=$(node -p "require('./package.json').version")
           if npm view "dghub-sdk@$VER" version >/dev/null 2>&1; then
-            echo "dghub-sdk@$VER �ѷ���������"
+            echo "dghub-sdk@$VER 已发布，跳过"
           else
             TAG=latest
             [[ "$VER" == *-* ]] && TAG=beta
