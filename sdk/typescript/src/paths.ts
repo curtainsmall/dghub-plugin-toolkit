@@ -33,6 +33,11 @@ function callerDir(depth = 2): string {
   return process.cwd();
 }
 
+/** 跨平台绝对路径：POSIX 绝对路径或 Windows 盘符（`C:/` / `C:\`）。 */
+function isAbsPath(p: string): boolean {
+  return isAbsolute(p) || /^[a-zA-Z]:[\\/]/.test(p);
+}
+
 let _cachedRoot: string | null = null;
 
 /**
