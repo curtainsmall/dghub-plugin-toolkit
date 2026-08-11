@@ -574,13 +574,14 @@ class App(ctk.CTk):
             dialog.destroy()
 
         btns = ctk.CTkFrame(dialog, fg_color="transparent")
-        btns.pack(padx=24, pady=(10, 24))
-        ctk.CTkButton(btns, text="忽略此版本", width=100,
-                      command=_on_ignore).pack(side="left", padx=5)
-        ctk.CTkButton(btns, text="安装" if has_installer else "下载",
-                      width=100, command=_on_ok).pack(side="left", padx=5)
+        btns.pack()
+        # 右对齐：side=right 从右向左排，pack 顺序与显示顺序相反；padx=5 统一间距
         ctk.CTkButton(btns, text="取消", width=100,
-                      command=_on_cancel).pack(side="left", padx=5)
+                      command=_on_cancel).pack(side="right", padx=5)
+        ctk.CTkButton(btns, text="安装" if has_installer else "下载",
+                      width=100, command=_on_ok).pack(side="right", padx=5)
+        ctk.CTkButton(btns, text="忽略此版本", width=100,
+                      command=_on_ignore).pack(side="right", padx=5)
 
         # 居中于主窗口
         dialog.update_idletasks()

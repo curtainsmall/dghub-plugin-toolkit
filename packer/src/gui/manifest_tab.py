@@ -758,8 +758,10 @@ class ManifestTab(ctk.CTkFrame):
                 btn = ctk.CTkButton(
                     row_f, text=opt, anchor="w", height=26,
                     fg_color="transparent", hover_color="#1F5380",
-                    command=lambda idx=i: _edit_option(idx),
                 )
+                # 双击选项行进入编辑（单击不触发）
+                btn.bind("<Double-Button-1>",
+                         lambda _e, idx=i: _edit_option(idx))
                 btn.pack(side="left", fill="x", expand=True)
                 del_btn = ctk.CTkButton(
                     row_f, text="X", width=28, height=26,
@@ -774,6 +776,7 @@ class ManifestTab(ctk.CTkFrame):
             dlg = ctk.CTkToplevel(win)
             dlg.title("添加选项")
             dlg.geometry("350x120")
+            dlg.resizable(False, False)
             dlg.transient(win)
             dlg.grab_set()
             self._center_dlg(dlg, win)
@@ -796,8 +799,14 @@ class ManifestTab(ctk.CTkFrame):
                 dlg.destroy()
             def on_cancel_opt() -> None:
                 dlg.destroy()
-            ctk.CTkButton(dlg, text="确定", command=on_ok_opt).grid(row=1, column=0, pady=15)
-            ctk.CTkButton(dlg, text="取消", command=on_cancel_opt).grid(row=1, column=1)
+            # 按钮行：整行右对齐，按钮不拉伸（固定宽，padx=5 统一间距）
+            btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+            btn_row.grid(row=1, column=0, columnspan=2, sticky="e",
+                         pady=(15, 10))
+            ctk.CTkButton(btn_row, text="取消", width=100,
+                          command=on_cancel_opt).pack(side="right", padx=5)
+            ctk.CTkButton(btn_row, text="确定", width=100,
+                          command=on_ok_opt).pack(side="right", padx=5)
             entry.bind("<Return>", lambda _: on_ok_opt())
             self._center_dlg(dlg, win)
             self.wait_window(dlg)
@@ -812,6 +821,7 @@ class ManifestTab(ctk.CTkFrame):
             dlg = ctk.CTkToplevel(win)
             dlg.title("编辑选项")
             dlg.geometry("350x120")
+            dlg.resizable(False, False)
             dlg.transient(win)
             dlg.grab_set()
             self._center_dlg(dlg, win)
@@ -835,8 +845,12 @@ class ManifestTab(ctk.CTkFrame):
                 dlg.destroy()
             def on_cancel_opt() -> None:
                 dlg.destroy()
-            ctk.CTkButton(dlg, text="确定", command=on_ok_opt).grid(row=1, column=0, pady=15)
-            ctk.CTkButton(dlg, text="取消", command=on_cancel_opt).grid(row=1, column=1)
+            ctk.CTkButton(dlg, text="确定", width=70,
+                          command=on_ok_opt).grid(
+                row=1, column=0, padx=(10, 10), pady=15)
+            ctk.CTkButton(dlg, text="取消", width=70,
+                          command=on_cancel_opt).grid(
+                row=1, column=1, padx=(10, 10), pady=15)
             entry.bind("<Return>", lambda _: on_ok_opt())
             self.wait_window(dlg)
             if result_opt is not None:
@@ -870,9 +884,10 @@ class ManifestTab(ctk.CTkFrame):
         _options_area.grid_remove()
         row += 1
 
-        # Load existing options for select type
+        # Load existing options for select type（加载后首次渲染选项按钮列表）
         if existing and "options" in existing and isinstance(existing["options"], list):
             _options_list = [str(o) for o in existing["options"]]
+        _refresh_options_display()
 
         # ----------------------------------------------------------------
         # Validation helpers
@@ -1017,14 +1032,14 @@ class ManifestTab(ctk.CTkFrame):
             result = field
             win.destroy()
 
-        # 底部按钮：右对齐（确定在左、取消在最右）
+        # 底部按钮：右对齐（确定在左、取消在最右），垂直间距与选项对话框一致
         btn_frame = ctk.CTkFrame(win, fg_color="transparent")
         btn_frame.grid(row=row, column=0, columnspan=2, sticky="e",
-                       padx=15, pady=15)
-        ctk.CTkButton(btn_frame, text="取消", width=80,
-                      command=win.destroy).pack(side="right")
-        ctk.CTkButton(btn_frame, text="确定", width=80,
-                      command=on_ok).pack(side="right", padx=(8, 0))
+                       pady=(10, 10))
+        ctk.CTkButton(btn_frame, text="取消", width=100,
+                      command=win.destroy).pack(side="right", padx=5)
+        ctk.CTkButton(btn_frame, text="确定", width=100,
+                      command=on_ok).pack(side="right", padx=5)
 
         self.wait_window(win)
         return result

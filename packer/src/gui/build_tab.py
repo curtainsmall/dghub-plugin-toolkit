@@ -543,11 +543,11 @@ class BuildTab(ctk.CTkFrame):
             win.destroy()
 
         btns = ctk.CTkFrame(win, fg_color="transparent")
-        btns.pack(fill="x", padx=16, pady=(16, 12))
+        btns.pack(fill="x")
         ctk.CTkButton(btns, text="取消", width=70,
-                      command=win.destroy).pack(side="right")
+                      command=win.destroy).pack(side="right", padx=5)
         ctk.CTkButton(btns, text="确定", width=70,
-                      command=_ok).pack(side="right", padx=(8, 0))
+                      command=_ok).pack(side="right", padx=5)
         self.wait_window(win)
         if not result:
             return None
