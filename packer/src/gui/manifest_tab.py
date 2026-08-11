@@ -624,23 +624,56 @@ class ManifestTab(ctk.CTkFrame):
             self._detail_edits[key] = widget
 
         _add_edit("key", "key", lambda m: ctk.CTkEntry(m))
-        # type（下拉切换 → 条件字段显隐）
+        # type（下拉切换 → 条件字段显隐 + 保存）
         _add_edit("type", "type", lambda m: ctk.CTkOptionMenu(
             m, values=sorted(VALID_FIELD_TYPES),
-            command=lambda _t: self._on_detail_type_changed()))
+            variable=self._detail_type,  # 绑定：选择时更新 StringVar
+            command=lambda _t: (self._on_detail_type_changed(),
+                                self._save_detail_field())))
         _add_edit("label", "label", lambda m: ctk.CTkEntry(m))
         _add_edit("description", "description", lambda m: ctk.CTkEntry(m))
-        _add_edit("default", "default", lambda m: ctk.CTkEntry(m))
-        _add_edit("options", "options", lambda m: ctk.CTkEntry(
-            m, placeholder_text="逗号分隔，如 a, b, c"))
+
+        # ---- default 行：控件按 type 动态切换（与旧编辑对话框一致）----
+        self._detail_default_row = ctk.CTkFrame(self._detail_form,
+                                                fg_color="transparent")
+        self._detail_default_row.pack(fill="x", pady=2)
+        self._detail_default_row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self._detail_default_row, text="default", width=90,
+                     anchor="w").grid(row=0, column=0, padx=(0, 5), sticky="w")
+        self._detail_default_widget: Any = None
+        self._detail_row_frames["default"] = self._detail_default_row
+
+        # ---- options 行：按钮列表（+ 添加 / 双击编辑 / X 删除）----
+        self._detail_options: list[str] = []
+        self._detail_options_row = ctk.CTkFrame(self._detail_form,
+                                                fg_color="transparent")
+        self._detail_options_row.pack(fill="x", pady=2)
+        self._detail_options_row.grid_columnconfigure(0, weight=1)
+        opts_head = ctk.CTkFrame(self._detail_options_row,
+                                 fg_color="transparent")
+        opts_head.grid(row=0, column=0, sticky="ew")
+        ctk.CTkLabel(opts_head, text="options", width=90,
+                     anchor="w").pack(side="left")
+        ctk.CTkButton(opts_head, text="+ 添加选项", width=80, height=22,
+                      command=self._add_option_detail).pack(side="right")
+        self._options_container = ctk.CTkFrame(self._detail_options_row,
+                                               fg_color="transparent")
+        self._options_container.grid(row=1, column=0, sticky="ew",
+                                     padx=(95, 0))
+        self._options_buttons: list[ctk.CTkButton] = []
+        self._detail_row_frames["options"] = self._detail_options_row
+
         for k in ("min", "max", "step"):
             _add_edit(k, k, lambda m: ctk.CTkEntry(m))
-        # 类型专属行默认隐藏（min/max/step/options 按 type 显示）
+        # 条件行默认隐藏（default/options/min/max/step 按 type 显示）
         for k in ("options", "min", "max", "step"):
             self._detail_row_frames[k].pack_forget()
+        self._detail_default_row.pack_forget()
 
         # 保存：变更即写回（FocusOut / Return / 下拉选择）
         def _wire_save(key: str, w: Any) -> None:
+            if key == "type":
+                return  # type 菜单 command 已在创建时绑定（显隐 + 保存），勿覆盖
             if isinstance(w, ctk.CTkOptionMenu):
                 w.configure(command=lambda _v: self._save_detail_field())
             else:
@@ -701,13 +734,16 @@ class ManifestTab(ctk.CTkFrame):
         self._set_detail_entry("label", str(field.get("label", "")))
         self._set_detail_entry("description",
                                str(field.get("description", "")))
-        self._set_detail_entry("default", _fmt_detail_default(field))
-        opts = field.get("options") or []
-        self._set_detail_entry("options", ", ".join(str(o) for o in opts))
         for k in ("min", "max", "step"):
             v = field.get(k)
             self._set_detail_entry(k, "" if v is None else str(v))
+        # options 按钮列表（select 专用）
+        self._detail_options = [str(o) for o in (field.get("options") or [])]
+        self._refresh_options_display()
+        # 行显隐 + 空重建（内部 _rebuild_default_widget 无恢复值）
         self._on_detail_type_changed()
+        # default 控件恢复字段原默认值（重建在显隐之后，避免被覆盖）
+        self._rebuild_default_widget(ftype, _fmt_detail_default(field))
 
     def _set_detail_entry(self, key: str, value: str) -> None:
         w = self._detail_edits.get(key)
@@ -716,16 +752,186 @@ class ManifestTab(ctk.CTkFrame):
             if value:
                 w.insert(0, value)
 
+    def _rebuild_default_widget(self, new_type: str,
+                                restore_value: str | None = None) -> None:
+        """重建 default 行控件（与旧编辑对话框一致）。
+
+        bool/channel/select → OptionMenu；其余 → Entry（placeholder 按 type）。
+        ``restore_value`` 仅加载/选中字段时传入；切换 type 时传 None 不保留。
+        """
+        row = self._detail_default_row
+        for w in row.grid_slaves(row=0, column=1):
+            w.destroy()
+        if new_type == "bool":
+            widget = ctk.CTkOptionMenu(row, values=["true", "false"])
+            if restore_value in ("true", "false"):
+                widget.set(restore_value)
+            else:
+                widget.set("false")
+        elif new_type == "channel":
+            widget = ctk.CTkOptionMenu(row, values=["A", "B", "Both"])
+            if restore_value and restore_value.lower() in ("a", "b", "both"):
+                widget.set(restore_value.upper())
+            else:
+                widget.set("A")
+        elif new_type == "select":
+            opts = (self._detail_options[:] if self._detail_options
+                    else ["(No Option)"])
+            widget = ctk.CTkOptionMenu(row, values=opts)
+            if restore_value in opts:
+                widget.set(restore_value)
+            else:
+                widget.set(opts[0])
+        else:
+            widget = ctk.CTkEntry(row)
+            widget._is_focused = False  # placeholder/焦点状态统一
+            if restore_value:
+                widget.insert(0, restore_value)
+            if new_type == "percent":
+                widget.configure(placeholder_text="0-100")
+            elif new_type == "duration":
+                widget.configure(placeholder_text=">= 0")
+            elif new_type == "number":
+                widget.configure(placeholder_text="number")
+        widget.grid(row=0, column=1, sticky="ew")
+        self._detail_default_widget = widget
+        # 变更即保存
+        if isinstance(widget, ctk.CTkOptionMenu):
+            widget.configure(command=lambda _v: self._save_detail_field())
+        else:
+            widget.bind("<FocusOut>", lambda _e: self._save_detail_field())
+            widget.bind("<Return>", lambda _e: self._save_detail_field())
+
+    def _default_value(self) -> str:
+        """读取 default 动态控件当前值（Entry → 文本；OptionMenu → 选项）。"""
+        w = self._detail_default_widget
+        if w is None:
+            return ""
+        if isinstance(w, ctk.CTkEntry):
+            return w.get().strip()
+        return str(w.get()).strip()
+
+    def _refresh_options_display(self) -> None:
+        """重建 options 按钮列表（+ 添加选项 按钮旁）。"""
+        for btn in self._options_buttons:
+            btn.destroy()
+        self._options_buttons.clear()
+        for i, opt in enumerate(self._detail_options):
+            row_f = ctk.CTkFrame(self._options_container,
+                                 fg_color="transparent")
+            row_f.pack(fill="x", padx=2, pady=1)
+            btn = ctk.CTkButton(
+                row_f, text=opt, anchor="w", height=24,
+                fg_color="transparent", hover_color="#1F5380",
+            )
+            # 双击选项文本 → 编辑
+            btn.bind("<Double-Button-1>",
+                     lambda _e, idx=i: self._edit_option_detail(idx))
+            btn.pack(side="left", fill="x", expand=True)
+            del_btn = ctk.CTkButton(
+                row_f, text="X", width=26, height=24,
+                fg_color="transparent", hover_color="#8B0000",
+                command=lambda idx=i: self._delete_option_detail(idx),
+            )
+            del_btn.pack(side="right", padx=(2, 0))
+            self._options_buttons.append(row_f)
+
+    def _option_prompt(self, title: str, initial: str = "") -> str | None:
+        """选项添加/编辑输入框（对话框——与旧编辑对话框一致）。"""
+        dlg = ctk.CTkToplevel(self)
+        dlg.title(title)
+        dlg.geometry("350x120")
+        dlg.resizable(False, False)
+        dlg.transient(self.winfo_toplevel())
+        dlg.grab_set()
+        # 简单居中（父窗口中心）
+        self.winfo_toplevel().update_idletasks()
+        x = self.winfo_toplevel().winfo_rootx() + 80
+        y = self.winfo_toplevel().winfo_rooty() + 120
+        dlg.geometry(f"350x120+{x}+{y}")
+        ctk.CTkLabel(dlg, text="选项文本:").grid(
+            row=0, column=0, padx=10, pady=(10, 0), sticky="w")
+        entry = ctk.CTkEntry(dlg, width=250)
+        entry._is_focused = False
+        entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
+        if initial:
+            entry.insert(0, initial)
+        entry.focus_set()
+        result: list[str | None] = [None]
+
+        def on_ok() -> None:
+            val = entry.get().strip()
+            if val:
+                result[0] = val
+                dlg.destroy()
+
+        def on_cancel() -> None:
+            dlg.destroy()
+
+        btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_row.grid(row=1, column=0, columnspan=2, sticky="e", pady=(15, 10))
+        ctk.CTkButton(btn_row, text="取消", width=100,
+                      command=on_cancel).pack(side="right", padx=5)
+        ctk.CTkButton(btn_row, text="确定", width=100,
+                      command=on_ok).pack(side="right", padx=5)
+        entry.bind("<Return>", lambda _e: on_ok())
+        dlg.wait_window()
+        return result[0]
+
+    def _add_option_detail(self) -> None:
+        """添加选项（对话框输入，重复项忽略）。"""
+        val = self._option_prompt("添加选项")
+        if val is None or val in self._detail_options:
+            return
+        self._detail_options.append(val)
+        self._refresh_options_display()
+        self._save_detail_field()
+
+    def _edit_option_detail(self, idx: int) -> None:
+        """双击选项 → 编辑文本。"""
+        if idx < 0 or idx >= len(self._detail_options):
+            return
+        old = self._detail_options[idx]
+        val = self._option_prompt("编辑选项", initial=old)
+        if val is None or not val:
+            return
+        if val in self._detail_options and val != old:
+            return
+        self._detail_options[idx] = val
+        self._refresh_options_display()
+        self._save_detail_field()
+
+    def _delete_option_detail(self, idx: int) -> None:
+        """删除选项（X 按钮）。"""
+        if idx < 0 or idx >= len(self._detail_options):
+            return
+        self._detail_options.pop(idx)
+        self._refresh_options_display()
+        self._save_detail_field()
+
     def _on_detail_type_changed(self) -> None:
-        """按 type 显示/隐藏条件字段行（options 仅 select；min/max/step 仅数值）。"""
+        """按 type 显隐条件行 + 重建 default 控件（与旧编辑对话框一致）。
+
+        全部 forget 后按固定顺序重排可见行——pack_forget 后重新 pack
+        会追加到末尾，直接显隐会导致行顺序错乱。
+        """
         ftype = self._detail_type.get()
         numeric = ftype in ("percent", "duration", "number")
-        for k, frame in self._detail_row_frames.items():
-            if k in ("min", "max", "step"):
-                frame.pack(fill="x", pady=2) if numeric else frame.pack_forget()
-            elif k == "options":
-                frame.pack(fill="x", pady=2) if ftype == "select" \
-                    else frame.pack_forget()
+        visible = {k for k in ("default", "options", "min", "max", "step")
+                   if (k == "default" and ftype != "preset")
+                   or (k == "options" and ftype == "select")
+                   or (k in ("min", "max", "step") and numeric)}
+        order = ["key", "type", "label", "description", "default",
+                 "options", "min", "max", "step"]
+        for k in order:
+            self._detail_row_frames[k].pack_forget()
+        for k in order:
+            # 条件行按 visible 显隐；其余行恒显示
+            if k in ("default", "options", "min", "max", "step")                     and k not in visible:
+                continue
+            self._detail_row_frames[k].pack(fill="x", pady=2)
+        # default 控件按 type 重建（切换 type 不保留旧值——与旧对话框一致）
+        self._rebuild_default_widget(ftype)
 
     def _save_detail_field(self) -> None:
         """把详情表单写回 sec["fields"][idx]（或新建字段）并自动保存。"""
@@ -750,8 +956,8 @@ class ManifestTab(ctk.CTkFrame):
             field["description"] = desc
         else:
             field.pop("description", None)
-        # default 按类型转换
-        raw = self._entry_text("default")
+        # default 按类型转换（读动态控件）
+        raw = self._default_value()
         field.pop("default", None)
         if raw:
             if ftype == "bool":
@@ -773,13 +979,10 @@ class ManifestTab(ctk.CTkFrame):
                     field[k] = float(raw) if "." in raw else int(raw)
                 except ValueError:
                     pass
-        # options（select）
+        # options（select，按钮列表写回）
         field.pop("options", None)
-        if ftype == "select":
-            opts = [o.strip() for o in self._entry_text("options").split(",")
-                    if o.strip()]
-            if opts:
-                field["options"] = opts
+        if ftype == "select" and self._detail_options:
+            field["options"] = list(self._detail_options)
         self._refresh_fields_display()
         self._auto_save()
 
