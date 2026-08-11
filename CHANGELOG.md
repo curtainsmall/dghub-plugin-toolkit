@@ -7,6 +7,24 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（版本跳号为预期行为）。
 
+## [0.9.0] - 2026-08-11
+
+### 新增
+
+- **Packer**：构建页「包名」输入框——自定义输出包名（zip/目录名），
+  留空默认使用插件目录名
+- **Packer**：编译产物条目在打包内容列表置顶显示（derived 优先，稳定排序）
+
+### 修复
+
+- **Packer**：placeholder 提示统一修复（CTkEntry 初始焦点态修正 + 空值加载
+  不再撤销提示）；DGHub 检测中提示改为黄色
+
+### 变更
+
+- **Packer**：Builder 条目改为 BuilderItem dataclass（持久化形状不变）；
+  类型注解统一 `X | None`（PEP 604，移除 Optional）；清除源码 BOM
+
 ## [0.8.0] - 2026-08-09
 
 ### 新增
