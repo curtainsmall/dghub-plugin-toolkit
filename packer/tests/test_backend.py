@@ -314,7 +314,7 @@ def test_run_build_no_compile(make_project, make_ctx):
     ctx, _ = make_ctx(pm, b, plugin_dir )
     artifact = run_build(ctx, {"id": "t", "name": "t"})
     assert artifact is not None
-    # folder 模式（no_zip=False 默认 → zip）
+    # folder 模式（no_zip=False 默认）→ zip；包名默认 = 插件目录名
     assert artifact.name == "testplugin.zip"
     import zipfile
     with zipfile.ZipFile(artifact) as zf:

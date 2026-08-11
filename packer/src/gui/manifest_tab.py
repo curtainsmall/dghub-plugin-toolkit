@@ -168,7 +168,7 @@ class ManifestTab(ctk.CTkFrame):
             ("name", "插件名称", "我的插件", True),
             ("version", "版本号", "0.1.0", True),
             ("author", "作者", "", False),
-            ("description", "描述", "一句话简介", False),
+            ("description", "简介", "", False),
             ("homepage", "主页", "https://...", False),
         ]:
             row = ctk.CTkFrame(frame, fg_color="transparent")
@@ -181,7 +181,8 @@ class ManifestTab(ctk.CTkFrame):
             if required:
                 ctk.CTkLabel(label_frame, text="*", text_color="red",
                              font=ctk.CTkFont(size=14)).pack(side="left")
-            widget: Any = ctk.CTkEntry(row, placeholder_text=placeholder)
+            widget: ctk.CTkEntry = ctk.CTkEntry(row, placeholder_text=placeholder)
+            widget._is_focused = False
             widget.grid(row=0, column=1, sticky="ew", padx=(5, 0))
             widget.bind("<KeyRelease>",
                         lambda e, k=key: self._on_field_keyrelease(k))
@@ -574,6 +575,7 @@ class ManifestTab(ctk.CTkFrame):
                              font=ctk.CTkFont(size=12)).pack(side="left")
             if widget_type == "entry":
                 e = ctk.CTkEntry(frame, width=250)
+                e._is_focused = False  # placeholder 统一激活（6.0.0 初始聚焦态）
                 e.grid(row=0, column=1, padx=(5, 0), sticky="e")
                 if existing and key in existing:
                     val = existing[key]
@@ -583,7 +585,9 @@ class ManifestTab(ctk.CTkFrame):
                         val = ", ".join(str(v) for v in val)
                     elif isinstance(val, bool):
                         val = "true" if val else "false"
-                    e.insert(0, str(val) if val is not None else "")
+                    if val is not None and str(val) != "":
+                        # 空值不 insert——insert(0, "") 会撤销 placeholder 显示
+                        e.insert(0, str(val))
                 entries[key] = e
                 # Placeholder hint for constrained fields
                 _ph = _PLACEHOLDER_MAP.get(key, "")
@@ -633,6 +637,7 @@ class ManifestTab(ctk.CTkFrame):
         _default_label_area.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(_default_label_area, text="默认值 (default)", anchor="w", width=80).pack(side="left")
         _default_entry = ctk.CTkEntry(_default_frame, width=250)
+        _default_entry._is_focused = False  # placeholder/焦点状态统一
         _default_entry.grid(row=0, column=1, padx=(5, 0), sticky="e")
         if existing and "default" in existing:
             val = existing["default"]
@@ -690,6 +695,7 @@ class ManifestTab(ctk.CTkFrame):
                     widget.set(opts[0])
             else:
                 widget = ctk.CTkEntry(frame, width=250)
+                widget._is_focused = False  # placeholder 统一激活
                 widget.grid(row=0, column=1, padx=(5, 0), sticky="e")
                 if existing_default is not None:
                     val_str = str(existing_default)
@@ -773,6 +779,7 @@ class ManifestTab(ctk.CTkFrame):
             self._center_dlg(dlg, win)
             ctk.CTkLabel(dlg, text="选项文本:").grid(row=0, column=0, padx=10, pady=(10, 0), sticky="w")
             entry = ctk.CTkEntry(dlg, width=250)
+            entry._is_focused = False  # placeholder/焦点状态统一
             entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
             entry.focus_set()
             result_opt: str | None = None
@@ -810,6 +817,7 @@ class ManifestTab(ctk.CTkFrame):
             self._center_dlg(dlg, win)
             ctk.CTkLabel(dlg, text="选项文本:").grid(row=0, column=0, padx=10, pady=(10, 0), sticky="w")
             entry = ctk.CTkEntry(dlg, width=250)
+            entry._is_focused = False  # placeholder/焦点状态统一
             entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
             entry.insert(0, old_val)
             entry.focus_set()
@@ -1056,7 +1064,8 @@ class ManifestTab(ctk.CTkFrame):
             w.insert("1.0", val)
         else:
             w.delete(0, "end")
-            w.insert(0, val)
+            if val:  # 空值不 insert——insert(0, "") 会撤销 placeholder 显示
+                w.insert(0, val)
 
     def _load_manifest(self, data: dict) -> None:
         """Populate the form from an existing manifest dict."""

@@ -244,14 +244,18 @@ class SettingsTab(ctk.CTkFrame):
 
         ctk.CTkLabel(runtime_frame, text="主机（DGHUB_HOST）:").grid(
             row=1, column=0, sticky="w", padx=(10, 5), pady=(0, 4))
-        ctk.CTkEntry(runtime_frame, textvariable=self._host_var, width=240,
-                     ).grid(row=1, column=1, sticky="w", padx=5, pady=(0, 4))
+        host_entry = ctk.CTkEntry(runtime_frame, textvariable=self._host_var,
+                                 width=240)
+        host_entry._is_focused = False  # placeholder/焦点状态统一
+        host_entry.grid(row=1, column=1, sticky="w", padx=5, pady=(0, 4))
         self._host_var.trace_add("write", lambda *_: self._save_env())
 
         ctk.CTkLabel(runtime_frame, text="端口（DGHUB_PORT）:").grid(
             row=2, column=0, sticky="w", padx=(10, 5), pady=(0, 4))
-        ctk.CTkEntry(runtime_frame, textvariable=self._port_var, width=240,
-                     ).grid(row=2, column=1, sticky="w", padx=5, pady=(0, 4))
+        port_entry = ctk.CTkEntry(runtime_frame, textvariable=self._port_var,
+                                 width=240)
+        port_entry._is_focused = False  # placeholder/焦点状态统一
+        port_entry.grid(row=2, column=1, sticky="w", padx=5, pady=(0, 4))
         self._port_var.trace_add("write", lambda *_: self._save_env())
 
         ctk.CTkLabel(

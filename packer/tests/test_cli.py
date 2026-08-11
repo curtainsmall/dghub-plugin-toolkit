@@ -44,7 +44,7 @@ def test_build_success(tmp_path, capsys):
     }, {"main.py": "print('hi')\n", "assets/data.json": "{}\n"})
     code = dispatch(["build", str(root), "--no-color"])
     assert code == EXIT_OK, capsys.readouterr().out
-    zip_path = root / "output" / "proj.zip"
+    zip_path = root / "output" / "proj.zip"  # 包名默认 = 插件目录名
     assert zip_path.is_file()
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
@@ -95,7 +95,7 @@ def test_build_no_color_position(tmp_path, capsys):
     }, {"main.py": "x"})
     code = dispatch(["build", str(root), "--no-color"])
     assert code == EXIT_OK
-    assert (root / "output" / "proj").is_dir()  # no_zip → folder
+    assert (root / "output" / "proj").is_dir()  # no_zip 出 folder；包名默认 = 插件目录名
 
 
 def test_build_no_project_readonly(tmp_path, capsys):

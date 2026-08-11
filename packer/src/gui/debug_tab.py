@@ -109,6 +109,7 @@ class DebugTab(ctk.CTkFrame):
         token_row.grid(row=1, column=1, sticky="w", padx=5, pady=3)
         entry = ctk.CTkEntry(token_row, textvariable=self._token_var,
                              width=240)
+        entry._is_focused = False  # placeholder/焦点状态统一
         entry.pack(side="left")
         self._controls.append(entry)
 

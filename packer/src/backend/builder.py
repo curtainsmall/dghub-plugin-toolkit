@@ -171,6 +171,13 @@ class Builder:
     def set_output_dir(self, value: str) -> None:
         self._pm.set_builder_field("output_dir", value)
 
+    def get_packer_name(self) -> str:
+        """自定义包名（zip/目录名）；空 = 使用插件目录名。"""
+        return str(self._pm.get_builder().get("packer_name", "")).strip()
+
+    def set_packer_name(self, value: str) -> None:
+        self._pm.set_builder_field("packer_name", value.strip())
+
     # ------------------------------------------------------------------
     # 必要条目校验（validate 阶段）
     # ------------------------------------------------------------------

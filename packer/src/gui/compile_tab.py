@@ -139,6 +139,7 @@ class CompileTab(ctk.CTkFrame):
         self._compile_entry = ctk.CTkEntry(
             self._cmd_frame, textvariable=self._compile_var,
             placeholder_text="可选，如 dotnet build -c Release，构建前执行")
+        self._compile_entry._is_focused = False  # placeholder 统一激活
         self._compile_entry.grid(row=0, column=1, sticky="ew", padx=5)
         self._controls.append(self._compile_entry)
 

@@ -5,6 +5,7 @@ pipeline 收集（Builder 条目 + 编译产物树），本模块只负责组装
 """
 
 import json
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -26,6 +27,25 @@ def cleanup_intermediates(output_dir: Path, plugin_name: str,
             shutil.rmtree(d, ignore_errors=True)
 
 
+_PACKER_NAME_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
+
+
+def resolve_packer_name(ctx: Any, manifest_data: dict[str, Any]) -> str:
+    """包名解析：显式包名（构建页「包名」）> 插件目录名（默认）。
+
+    显式包名非法（非安全字符）时视为未提供，回退插件目录名。
+    """
+    name = ""
+    builder = getattr(ctx, "builder", None)
+    if builder is not None:
+        name = builder.get_packer_name()
+    if not _PACKER_NAME_RE.match(name):
+        name = ""
+    if not name:
+        name = ctx.plugin_name
+    return name
+
+
 def package_plugin(ctx: Any, manifest_data: dict[str, Any],
                    out_files: list[tuple[Path, str]],
                    no_zip: bool,
@@ -35,13 +55,15 @@ def package_plugin(ctx: Any, manifest_data: dict[str, Any],
     - ``no_zip=False``（默认）→ ``<name>.zip``（分发）
     - ``no_zip=True`` → ``<name>/`` 目录（调试，就地可用）
     - ``keep_cache=True``（调试构建）→ 保留 .deps / cache 供下次增量
+    - 包名：显式包名（构建页「包名」）> manifest.id > 插件目录名
 
     收集阶段的缺失/冲突已由 pipeline 的 Builder.resolve 抛出 BuildError。
     """
+    packer_name = resolve_packer_name(ctx, manifest_data)
     manifest_json = json.dumps(manifest_data, ensure_ascii=False, indent=2)
 
     if no_zip:
-        folder_dir = ctx.output_dir / ctx.plugin_name
+        folder_dir = ctx.output_dir / packer_name
         folder_dir.mkdir(parents=True, exist_ok=True)
         (folder_dir / "manifest.json").write_text(
             manifest_json, encoding="utf-8")
@@ -55,7 +77,7 @@ def package_plugin(ctx: Any, manifest_data: dict[str, Any],
         ctx.log.success(f"文件夹已发布: {folder_dir}")
         artifact = folder_dir
     else:  # zip（默认）
-        zip_path = ctx.output_dir / f"{ctx.plugin_name}.zip"
+        zip_path = ctx.output_dir / f"{packer_name}.zip"
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("manifest.json", manifest_json)
             for src, arc in out_files:
