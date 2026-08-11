@@ -28,7 +28,7 @@ project.json 为唯一配置文件（format_version 2，顶层平铺 + builder �
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.logbus import Logger
 
@@ -73,7 +73,7 @@ class ProjectManager:
     """
 
     def __init__(self, plugin_dir: str,
-                 log: Optional[Logger] = None) -> None:
+                 log: Logger | None = None) -> None:
         # resolve：插件目录可能传入 "." 等相对路径，未解析时 .name 为空串，
         # 会导致产物名（如 {name}.exe / {name}.zip）为空
         self._plugin_dir = Path(plugin_dir).resolve()

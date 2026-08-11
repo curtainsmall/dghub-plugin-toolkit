@@ -11,7 +11,7 @@
 import os
 import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import customtkinter as ctk
 
@@ -37,17 +37,17 @@ class DebugTab(ctk.CTkFrame):
     """调试页：模式选择 + 环境变量 + 启动/停止 + 状态行。"""
 
     def __init__(self, master: Any, logger: Logger,
-                 on_state_change: Optional[Any] = None,
+                 on_state_change: Any | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
-        self._pm: Optional[ProjectManager] = None
-        self._plugin_dir: Optional[str] = None
+        self._pm: ProjectManager | None = None
+        self._plugin_dir: str | None = None
         self._logger = logger
         self._on_state_change = on_state_change  # 运行状态变化回调（锁定互斥）
         self._controls: list[ctk.CTkBaseClass] = []
         self._enabled = False
         self._running = False
-        self._canceller: Optional[Canceller] = None
+        self._canceller: Canceller | None = None
 
         # 状态变量
         self._mode_var = ctk.StringVar(value="调试源码")
@@ -109,6 +109,7 @@ class DebugTab(ctk.CTkFrame):
         token_row.grid(row=1, column=1, sticky="w", padx=5, pady=3)
         entry = ctk.CTkEntry(token_row, textvariable=self._token_var,
                              width=240)
+        entry._is_focused = False  # placeholder/焦点状态统一
         entry.pack(side="left")
         self._controls.append(entry)
 
@@ -229,7 +230,8 @@ class DebugTab(ctk.CTkFrame):
 
     def _detect_clicked(self) -> None:
         self._detecting = True
-        self._detect_hint.configure(text="检测中...")
+        self._detect_hint.configure(text="检测中...",
+                                    text_color=("#B8860B", "#E6B84B"))
         threading.Thread(target=self._detect_work, daemon=True).start()
 
     def _detect_work(self) -> None:
@@ -379,7 +381,7 @@ class DebugTab(ctk.CTkFrame):
     # 外部钩子
     # ------------------------------------------------------------------
 
-    def set_plugin_dir(self, d: str, pm: Optional[ProjectManager] = None) -> None:
+    def set_plugin_dir(self, d: str, pm: ProjectManager | None = None) -> None:
         if pm:
             self._pm = pm
         self._plugin_dir = d

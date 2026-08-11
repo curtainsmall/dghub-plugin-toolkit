@@ -17,12 +17,13 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.build_control import Canceller
 from backend.py_compiler import build_plugin_exe
 from backend.logbus import Logger
 from backend.winflags import _NO_WINDOW
+from backend.builder import BuilderItem
 
 
 @dataclass
@@ -36,16 +37,16 @@ class CompilerContext:
     cfg: dict[str, Any]          # 编译设置字段（compile_system 相关字段）
     log: Logger
     pypi_index: str = ""
-    canceller: Optional[Canceller] = None
+    canceller: Canceller | None = None
     # 调试构建：保留缓存（PyInstaller workpath / tsc tsbuildinfo 增量）
     keep_cache: bool = False
 
 
 def run_logged(cmd: Any, logger: Logger, source: str,
-               cwd: Optional[str] = None, shell: bool = False,
+               cwd: str | None = None, shell: bool = False,
                timeout: int = 900,
-               env: Optional[dict] = None,
-               canceller: Optional[Canceller] = None) -> bool:
+               env: dict | None = None,
+               canceller: Canceller | None = None) -> bool:
     """执行子进程（可取消），输出以来源分隔块记录，返回是否成功。"""
     try:
         proc = subprocess.Popen(
@@ -93,7 +94,7 @@ class Compiler:
         """所选清单是否本编译可识别（无清单概念恒 False）。"""
         return False
 
-    def probe(self, plugin_dir: Path) -> Optional[dict[str, Any]]:
+    def probe(self, plugin_dir: Path) -> dict[str, Any] | None:
         """探测项目，建议初始配置（无探测能力恒 None）。"""
         return None
 
@@ -113,14 +114,14 @@ class Compiler:
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Optional[Path] = None) -> Optional[list[dict[str, Any]]]:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         """检查设置是否足以推导 Builder 条目；返回建议条目或 None。
 
         ``source_dir`` 供需要读清单（如入口字段）的编译使用，可选。
         """
         return None
 
-    def prod_dir(self, output_dir: Path, plugin_name: str) -> Optional[Path]:
+    def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:
         """编译产物根目录（derived 条目解析基准）；无产物概念返回 None。
 
         编译产物约定集中在 output_dir 下、以 .<体系>/<插件名>/ 隔离，
@@ -128,7 +129,7 @@ class Compiler:
         """
         return None
 
-    def debug_source_command(self, plugin_dir: Path) -> Optional[list[str]]:
+    def debug_source_command(self, plugin_dir: Path) -> list[str] | None:
         """「调试源码」启动命令；不支持返回 None。
 
         返回的命令由调试页在插件根目录启动（cwd=plugin_dir），
@@ -163,12 +164,12 @@ class CommandCompiler(Compiler):
     def enabled(self, cfg: dict[str, Any]) -> bool:
         return bool(cfg.get("compile"))
 
-    def probe(self, plugin_dir: Path) -> Optional[dict[str, Any]]:
+    def probe(self, plugin_dir: Path) -> dict[str, Any] | None:
         return None
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Optional[Path] = None) -> Optional[list[dict[str, Any]]]:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         return None
 
     def run(self, ctx: CompilerContext) -> bool:
@@ -215,7 +216,7 @@ class PythonCompiler(Compiler):
         # 支持该表；requirements.txt / setup.py 等无法声明，不接受
         return filename.lower() == "pyproject.toml"
 
-    def probe(self, plugin_dir: Path) -> Optional[dict[str, Any]]:
+    def probe(self, plugin_dir: Path) -> dict[str, Any] | None:
         """探测 pyproject.toml → 建议 manifest / include_sdk。"""
         pyproject = plugin_dir / "pyproject.toml"
         if not pyproject.is_file():
@@ -260,7 +261,7 @@ class PythonCompiler(Compiler):
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Optional[Path] = None) -> Optional[list[dict[str, Any]]]:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         """manifest 已选 → 推导编译产物条目（显式声明，derived 只读）。
 
         - 入口 exe（<插件名>.exe，entry 标签）
@@ -272,15 +273,15 @@ class PythonCompiler(Compiler):
         if not plugin_name:
             return None
         return [
-            {"path": f"{plugin_name}.exe", "tags": ["entry"],
-             "derived": True},
-            {"dir": "_internal", "derived": True},
+            BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
+                        derived=True),
+            BuilderItem(dir="_internal", derived=True),
         ]
 
-    def prod_dir(self, output_dir: Path, plugin_name: str) -> Optional[Path]:
+    def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:
         return output_dir / ".pyi" / plugin_name
 
-    def debug_source_command(self, plugin_dir: Path) -> Optional[list[str]]:
+    def debug_source_command(self, plugin_dir: Path) -> list[str] | None:
         """uv run --project 运行 [tool.dghub].entry 源码；entry 缺失返回 None。"""
         entry = read_tool_dghub_entry(plugin_dir / "pyproject.toml")
         if not entry:
@@ -426,7 +427,7 @@ class NodeCompiler(Compiler):
     def is_known_manifest(self, filename: str) -> bool:
         return filename.lower() == "package.json"
 
-    def probe(self, plugin_dir: Path) -> Optional[dict[str, Any]]:
+    def probe(self, plugin_dir: Path) -> dict[str, Any] | None:
         """探测 package.json → 建议 manifest。"""
         if (plugin_dir / "package.json").is_file():
             return {"manifest": "package.json"}
@@ -463,14 +464,14 @@ class NodeCompiler(Compiler):
 
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
-                source_dir: Optional[Path] = None) -> Optional[list[dict[str, Any]]]:
+                source_dir: Path | None = None) -> list[BuilderItem] | None:
         """manifest 已选 → 推导产物条目：SEA exe + node_modules + 入口目录。"""
         if not cfg.get("manifest") or not plugin_name:
             return None
-        items: list[dict[str, Any]] = [
-            {"path": f"{plugin_name}.exe", "tags": ["entry"],
-             "derived": True},
-            {"dir": "node_modules", "derived": True},
+        items: list[BuilderItem] = [
+            BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
+                        derived=True),
+            BuilderItem(dir="node_modules", derived=True),
         ]
         # 入口所在目录（dist / src …）随产物收集；入口在根则只收入口文件
         if source_dir is not None:
@@ -478,19 +479,19 @@ class NodeCompiler(Compiler):
                 source_dir / str(cfg.get("manifest", "")))
             entry_dir = str(Path(entry).parent) if entry else ""
             if entry_dir not in ("", "."):
-                items.append({"dir": entry_dir, "derived": True})
+                items.append(BuilderItem(dir=entry_dir, derived=True))
             elif entry:
-                items.append({"path": entry, "derived": True})
+                items.append(BuilderItem(path=entry, derived=True))
         return items
 
-    def debug_source_command(self, plugin_dir: Path) -> Optional[list[str]]:
+    def debug_source_command(self, plugin_dir: Path) -> list[str] | None:
         """node 运行 package.json main 入口；入口缺失返回 None。"""
         entry = read_package_json_main(plugin_dir / "package.json")
         if not entry:
             return None
         return ["node", entry]
 
-    def prod_dir(self, output_dir: Path, plugin_name: str) -> Optional[Path]:
+    def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:
         return output_dir / ".node" / plugin_name
 
     def run(self, ctx: CompilerContext) -> bool:

@@ -9,7 +9,7 @@ BuildContext 由 GUI 组装（app.py），本模块不接触前端。经 ctx.log
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.builder import BuildError, Builder
 from backend.build_control import Canceller
@@ -34,9 +34,9 @@ class BuildContext:
     compile_system: str        # ""（无）/ "python" / "command"
     builder: Builder
     log: Logger
-    pm: Optional[ProjectManager] = None
+    pm: ProjectManager | None = None
     pypi_index: str = ""
-    canceller: Optional[Canceller] = None
+    canceller: Canceller | None = None
     # 编译设置字段（compile_system 相关，由 app.py 从 project.json 读取）
     compile_cfg: dict[str, Any] = field(default_factory=dict)
     # 调试构建：保留 .deps / cache（PyInstaller 增量缓存前提）
@@ -52,7 +52,7 @@ def validate(ctx: BuildContext) -> list[str]:
     return errors
 
 
-def fill_builder(ctx: BuildContext) -> Optional[list[str]]:
+def fill_builder(ctx: BuildContext) -> list[str] | None:
     """「从编译填充」：probe + deduce 串联，只填空。
 
     将建议落盘（编译设置字段 / Builder 条目），
@@ -80,23 +80,23 @@ def fill_builder(ctx: BuildContext) -> Optional[list[str]]:
 
     # 2) deduce：建议编译产物条目（只填空——已存在 entry 条目不重复添加）
     items = ctx.builder.items()
-    has_entry = any("entry" in it.get("tags", []) for it in items)
+    has_entry = any("entry" in it.tags for it in items)
     deduced = comp.deduce(ctx.compile_cfg, ctx.plugin_name, ctx.source_dir)
     if deduced and not has_entry:
         for item in deduced:
-            if "path" in item:
-                ctx.builder.add_file(item["path"], item.get("tags"),
-                                     derived=bool(item.get("derived")))
-                applied.append(f"添加打包内容: {item['path']}（入口）")
-            elif "dir" in item:
-                ctx.builder.add_dir(item["dir"], item.get("tags"),
-                                    derived=bool(item.get("derived")))
-                applied.append(f"添加打包内容: {item['dir']}（编译产物）")
+            if item.path is not None:
+                ctx.builder.add_file(item.path, item.tags,
+                                     derived=item.derived)
+                applied.append(f"添加打包内容: {item.path}（入口）")
+            elif item.dir is not None:
+                ctx.builder.add_dir(item.dir, item.tags,
+                                    derived=item.derived)
+                applied.append(f"添加打包内容: {item.dir}（编译产物）")
 
     return applied
 
 
-def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Optional[Path]:
+def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Path | None:
     """执行两阶段构建并打包，返回产物路径；失败返回 None。
 
     校验失败（BuildError 语义）时返回 None，错误经 ctx.log 记录；
@@ -140,10 +140,10 @@ def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Optional[Path
                           or ctx.compile_cfg.get("manifest")),
         prod_dir=prod_dir)
 
-    # manifest：entry = entry 标签条目的 arc（validate 已保证恰好一个）
+    # manifest 的 entry = entry 标签条目的 arc（validate 已保证恰好一个）
     entry_item = ctx.builder.entry_item()
-    assert entry_item is not None and "path" in entry_item
-    entry_arc = entry_item["path"]
+    assert entry_item is not None and entry_item.path is not None
+    entry_arc = entry_item.path
 
     # 入口产物兜底校验：entry 文件可能由编译阶段产出（不在 source_dir），
     # 收集完成后必须实际存在（产物树或打包内容之一提供）

@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable
 
 # UI 需要着色的级别（其余级别一律默认色）
 COLORED_LEVELS = ("error", "warning", "success")
@@ -47,7 +47,7 @@ class Logger:
         self._sink(f"━━━ {title} ━━━", "sep")
 
     def external(self, source: str, lines: Iterable[str],
-                 returncode: Optional[int] = None) -> None:
+                 returncode: int | None = None) -> None:
         """输出一段外部工具原始输出，前后以来源分隔头包裹。
 
         Args:

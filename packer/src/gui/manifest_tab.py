@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 from tkinter import messagebox
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import customtkinter as ctk
 
@@ -51,7 +51,7 @@ class ManifestTab(ctk.CTkFrame):
     """Tab for creating / editing manifest.json."""
 
     def __init__(self, master: Any,
-                 on_field_edit: Optional[Callable[[str], None]] = None,
+                 on_field_edit: Callable[[str], None] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
         # internal data
@@ -60,10 +60,10 @@ class ManifestTab(ctk.CTkFrame):
         self._selected_section: int = 0
         self._field_buttons: list[ctk.CTkButton] = []
         self._selected_field: int = 0
-        self._plugin_dir: Optional[str] = None
+        self._plugin_dir: str | None = None
         self._controls: list[ctk.CTkBaseClass] = []
         self._field_errors: dict[str, str] = {}
-        self._pm: Optional[ProjectManager] = None
+        self._pm: ProjectManager | None = None
         self._auto_save_enabled = False
         # 字段被编辑时回调（key）→ 供 app 级联清除错误高亮
         self._on_field_edit = on_field_edit
@@ -168,7 +168,7 @@ class ManifestTab(ctk.CTkFrame):
             ("name", "插件名称", "我的插件", True),
             ("version", "版本号", "0.1.0", True),
             ("author", "作者", "", False),
-            ("description", "描述", "一句话简介", False),
+            ("description", "简介", "", False),
             ("homepage", "主页", "https://...", False),
         ]:
             row = ctk.CTkFrame(frame, fg_color="transparent")
@@ -181,7 +181,8 @@ class ManifestTab(ctk.CTkFrame):
             if required:
                 ctk.CTkLabel(label_frame, text="*", text_color="red",
                              font=ctk.CTkFont(size=14)).pack(side="left")
-            widget: Any = ctk.CTkEntry(row, placeholder_text=placeholder)
+            widget: ctk.CTkEntry = ctk.CTkEntry(row, placeholder_text=placeholder)
+            widget._is_focused = False
             widget.grid(row=0, column=1, sticky="ew", padx=(5, 0))
             widget.bind("<KeyRelease>",
                         lambda e, k=key: self._on_field_keyrelease(k))
@@ -354,7 +355,7 @@ class ManifestTab(ctk.CTkFrame):
             self._refresh_fields_display()
             self._refresh_preview()
 
-    def _get_selected_section_index(self) -> Optional[int]:
+    def _get_selected_section_index(self) -> int | None:
         if 0 <= self._selected_section < len(self._sections):
             return self._selected_section
         return None
@@ -472,7 +473,7 @@ class ManifestTab(ctk.CTkFrame):
     # field management
     # ------------------------------------------------------------------
 
-    def _get_current_section(self) -> Optional[dict]:
+    def _get_current_section(self) -> dict | None:
         idx = self._get_selected_section_index()
         if idx is not None and 0 <= idx < len(self._sections):
             return self._sections[idx]
@@ -524,7 +525,7 @@ class ManifestTab(ctk.CTkFrame):
         """Center child dialog on parent window, clamped within parent bounds."""
         center_dialog(child, parent_win)
 
-    def _field_dialog(self, existing: Optional[dict] = None) -> Optional[dict]:
+    def _field_dialog(self, existing: dict | None = None) -> dict | None:
         """Open a dialog for adding/editing a field. Returns field dict or None."""
         win = ctk.CTkToplevel(self)
         win.title("编辑字段" if existing else "添加字段")
@@ -539,13 +540,13 @@ class ManifestTab(ctk.CTkFrame):
         entries: dict[str, Any] = {}
         error_labels: dict[str, ctk.CTkLabel] = {}
         row_frames: dict[str, ctk.CTkFrame] = {}
-        result: Optional[dict] = None
+        result: dict | None = None
         row = 0
 
         # For select type interactive options list
         _options_list: list[str] = []
         _options_buttons: list[ctk.CTkButton] = []
-        _options_area: Optional[ctk.CTkFrame] = None
+        _options_area: ctk.CTkFrame | None = None
 
         # Placeholder hints for constrained entry fields
         _PLACEHOLDER_MAP: dict[str, str] = {
@@ -556,7 +557,7 @@ class ManifestTab(ctk.CTkFrame):
 
         def add_row(label: str, key: str,
                     widget_type: str = "entry",
-                    options: Optional[list[str]] = None,
+                    options: list[str] | None = None,
                     pady: int = 1,
                     required: bool = False) -> ctk.CTkFrame:
             """Add a labelled row with optional inline error label."""
@@ -574,6 +575,7 @@ class ManifestTab(ctk.CTkFrame):
                              font=ctk.CTkFont(size=12)).pack(side="left")
             if widget_type == "entry":
                 e = ctk.CTkEntry(frame, width=250)
+                e._is_focused = False  # placeholder 统一激活（6.0.0 初始聚焦态）
                 e.grid(row=0, column=1, padx=(5, 0), sticky="e")
                 if existing and key in existing:
                     val = existing[key]
@@ -583,7 +585,9 @@ class ManifestTab(ctk.CTkFrame):
                         val = ", ".join(str(v) for v in val)
                     elif isinstance(val, bool):
                         val = "true" if val else "false"
-                    e.insert(0, str(val) if val is not None else "")
+                    if val is not None and str(val) != "":
+                        # 空值不 insert——insert(0, "") 会撤销 placeholder 显示
+                        e.insert(0, str(val))
                 entries[key] = e
                 # Placeholder hint for constrained fields
                 _ph = _PLACEHOLDER_MAP.get(key, "")
@@ -633,6 +637,7 @@ class ManifestTab(ctk.CTkFrame):
         _default_label_area.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(_default_label_area, text="默认值 (default)", anchor="w", width=80).pack(side="left")
         _default_entry = ctk.CTkEntry(_default_frame, width=250)
+        _default_entry._is_focused = False  # placeholder/焦点状态统一
         _default_entry.grid(row=0, column=1, padx=(5, 0), sticky="e")
         if existing and "default" in existing:
             val = existing["default"]
@@ -690,6 +695,7 @@ class ManifestTab(ctk.CTkFrame):
                     widget.set(opts[0])
             else:
                 widget = ctk.CTkEntry(frame, width=250)
+                widget._is_focused = False  # placeholder 统一激活
                 widget.grid(row=0, column=1, padx=(5, 0), sticky="e")
                 if existing_default is not None:
                     val_str = str(existing_default)
@@ -706,7 +712,7 @@ class ManifestTab(ctk.CTkFrame):
             entries["default"] = widget
 
         # 当前对话框显示的类型（None = 尚未初始化，首次调用视为初始加载）
-        _current_dlg_type: list[Optional[str]] = [None]
+        _current_dlg_type: list[str | None] = [None]
 
         def on_type_change(new_type: str) -> None:
             """Show/hide optional rows based on selected type."""
@@ -773,9 +779,10 @@ class ManifestTab(ctk.CTkFrame):
             self._center_dlg(dlg, win)
             ctk.CTkLabel(dlg, text="选项文本:").grid(row=0, column=0, padx=10, pady=(10, 0), sticky="w")
             entry = ctk.CTkEntry(dlg, width=250)
+            entry._is_focused = False  # placeholder/焦点状态统一
             entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
             entry.focus_set()
-            result_opt: Optional[str] = None
+            result_opt: str | None = None
             def on_ok_opt() -> None:
                 nonlocal result_opt
                 val = entry.get().strip()
@@ -810,10 +817,11 @@ class ManifestTab(ctk.CTkFrame):
             self._center_dlg(dlg, win)
             ctk.CTkLabel(dlg, text="选项文本:").grid(row=0, column=0, padx=10, pady=(10, 0), sticky="w")
             entry = ctk.CTkEntry(dlg, width=250)
+            entry._is_focused = False  # placeholder/焦点状态统一
             entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
             entry.insert(0, old_val)
             entry.focus_set()
-            result_opt: Optional[str] = None
+            result_opt: str | None = None
             def on_ok_opt() -> None:
                 nonlocal result_opt
                 val = entry.get().strip()
@@ -1025,7 +1033,7 @@ class ManifestTab(ctk.CTkFrame):
     # directory selection
     # ------------------------------------------------------------------
 
-    def set_plugin_dir(self, d: str, pm: Optional[ProjectManager] = None) -> None:
+    def set_plugin_dir(self, d: str, pm: ProjectManager | None = None) -> None:
         """Set plugin directory and load manifest from project manager."""
         if pm:
             self._pm = pm
@@ -1056,7 +1064,8 @@ class ManifestTab(ctk.CTkFrame):
             w.insert("1.0", val)
         else:
             w.delete(0, "end")
-            w.insert(0, val)
+            if val:  # 空值不 insert——insert(0, "") 会撤销 placeholder 显示
+                w.insert(0, val)
 
     def _load_manifest(self, data: dict) -> None:
         """Populate the form from an existing manifest dict."""
@@ -1169,7 +1178,7 @@ class ManifestTab(ctk.CTkFrame):
     # external access
     # ------------------------------------------------------------------
 
-    def get_plugin_dir(self) -> Optional[str]:
+    def get_plugin_dir(self) -> str | None:
         return self._plugin_dir
 
     def get_manifest_data(self) -> dict:

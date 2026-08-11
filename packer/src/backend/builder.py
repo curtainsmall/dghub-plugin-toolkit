@@ -10,10 +10,48 @@ Builder 完全独立：只消费 builder.files 与发布选项，不引用编译
 路径（镜像插件根布局），编译产物树由管线另行并入。
 """
 
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.project_manager import ProjectManager
+
+
+@dataclass
+class BuilderItem:
+    """打包内容条目：path / dir / pattern 三选一，可选 tags 与 derived。
+
+    ``derived=True`` 表示编译产物条目（显式声明，非用户选择）；
+    持久化到 project.json 时经 ``to_dict()`` 保持原 JSON 形状。
+    """
+
+    path: str | None = None
+    dir: str | None = None
+    pattern: str | None = None
+    tags: list[str] = field(default_factory=list)
+    derived: bool = False
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "BuilderItem":
+        return cls(
+            path=d.get("path"),
+            dir=d.get("dir"),
+            pattern=d.get("pattern"),
+            tags=list(d.get("tags", [])),
+            derived=bool(d.get("derived")),
+        )
+
+    def to_dict(self) -> dict:
+        item: dict[str, Any] = {}
+        for key in ("path", "dir", "pattern"):
+            value = getattr(self, key)
+            if value is not None:
+                item[key] = value
+        if self.tags:
+            item["tags"] = list(self.tags)
+        if self.derived:
+            item["derived"] = True
+        return item
 
 
 class BuildError(Exception):
@@ -44,47 +82,40 @@ class Builder:
     # 打包内容（用户 / 编译 / 任何来源均通过同一接口添加条目）
     # ------------------------------------------------------------------
 
-    def _files(self) -> list[dict[str, Any]]:
-        return self._pm.read_builder_files()
+    def _files(self) -> list[BuilderItem]:
+        return [BuilderItem.from_dict(d)
+                for d in self._pm.read_builder_files()]
 
-    def _save(self, files: list[dict[str, Any]]) -> None:
-        self._pm.write_builder_files(files)
+    def _save(self, files: list[BuilderItem]) -> None:
+        self._pm.write_builder_files(
+            [f.to_dict() for f in files])
 
     def add_file(self, rel: str,
-                 tags: Optional[list[str]] = None,
+                 tags: list[str] | None = None,
                  derived: bool = False) -> None:
         files = self._files()
-        files.append(self._entry(rel, "path", tags, derived))
+        files.append(BuilderItem(path=rel, tags=list(tags or []),
+                                 derived=derived))
         self._save(files)
 
     def add_dir(self, rel: str,
-                tags: Optional[list[str]] = None,
+                tags: list[str] | None = None,
                 derived: bool = False) -> None:
         files = self._files()
-        files.append(self._entry(rel, "dir", tags, derived))
+        files.append(BuilderItem(dir=rel, tags=list(tags or []),
+                                 derived=derived))
         self._save(files)
 
     def add_rule(self, pattern: str,
-                 tags: Optional[list[str]] = None) -> None:
+                 tags: list[str] | None = None) -> None:
         files = self._files()
-        files.append(self._entry(pattern, "pattern", tags))
+        files.append(BuilderItem(pattern=pattern, tags=list(tags or [])))
         self._save(files)
-
-    @staticmethod
-    def _entry(rel: str, kind: str,
-               tags: Optional[list[str]],
-               derived: bool = False) -> dict[str, Any]:
-        item: dict[str, Any] = {kind: rel}
-        if tags:
-            item["tags"] = list(tags)
-        if derived:
-            item["derived"] = True  # 编译产物条目（显式声明，非用户选择）
-        return item
 
     def remove_derived(self) -> int:
         """移除所有 derived（编译产物）条目，返回移除数量。"""
         files = self._files()
-        kept = [it for it in files if not it.get("derived")]
+        kept = [it for it in files if not it.derived]
         n = len(files) - len(kept)
         if n:
             self._save(kept)
@@ -100,10 +131,7 @@ class Builder:
         """贴/改标签（如标为 entry）。"""
         files = self._files()
         if 0 <= idx < len(files):
-            if tags:
-                files[idx]["tags"] = list(tags)
-            else:
-                files[idx].pop("tags", None)
+            files[idx].tags = list(tags)
             self._save(files)
 
     def set_path(self, idx: int, rel: str) -> None:
@@ -111,15 +139,21 @@ class Builder:
         files = self._files()
         if 0 <= idx < len(files):
             item = files[idx]
-            for key in ("path", "dir", "pattern"):
-                if key in item:
-                    item[key] = rel
-                    break
+            if item.path is not None:
+                item.path = rel
+            elif item.dir is not None:
+                item.dir = rel
+            else:
+                item.pattern = rel
             self._save(files)
 
-    def items(self) -> list[dict[str, Any]]:
-        """条目列表 [{"path"|"dir"|"pattern": ..., "tags": [...]}]。"""
-        return list(self._files())
+    def items(self) -> list[BuilderItem]:
+        """条目列表：编译产物（derived）优先显示，其余保持添加顺序。
+
+        稳定排序——derived 条目组内保持原顺序；交互索引与显示一致。
+        """
+        return sorted(self._files(),
+                      key=lambda it: it.derived, reverse=True)
 
     # ------------------------------------------------------------------
     # 发布选项
@@ -137,6 +171,13 @@ class Builder:
     def set_output_dir(self, value: str) -> None:
         self._pm.set_builder_field("output_dir", value)
 
+    def get_packer_name(self) -> str:
+        """自定义包名（zip/目录名）；空 = 使用插件目录名。"""
+        return str(self._pm.get_builder().get("packer_name", "")).strip()
+
+    def set_packer_name(self, value: str) -> None:
+        self._pm.set_builder_field("packer_name", value.strip())
+
     # ------------------------------------------------------------------
     # 必要条目校验（validate 阶段）
     # ------------------------------------------------------------------
@@ -147,21 +188,20 @@ class Builder:
         文件存在性不在校验期检查——编译产物（如 <name>.exe）由阶段 1
         构建时生成，存在性由 resolve（收集阶段）兜底报 BuildError。
         """
-        entries = [i for i in self.items()
-                   if "entry" in i.get("tags", [])]
+        entries = [i for i in self.items() if "entry" in i.tags]
         if len(entries) > 1:
             return ["入口条目重复：请仅将一个文件设为入口"]
         if not entries:
             return ["缺少入口条目，请在打包内容中设置入口"]
         item = entries[0]
-        if "path" not in item:
+        if item.path is None:
             return ["入口必须是单个文件（目录/规则不能作为入口）"]
         return []
 
-    def entry_item(self) -> Optional[dict[str, Any]]:
+    def entry_item(self) -> BuilderItem | None:
         """返回带 entry 标签的条目（validate 已保证恰好一个）。"""
         for item in self.items():
-            if "entry" in item.get("tags", []):
+            if "entry" in item.tags:
                 return item
         return None
 
@@ -171,7 +211,7 @@ class Builder:
 
     def resolve(self, source_dir: Path,
                 entry_exempt: bool = True,
-                prod_dir: Optional[Path] = None) -> list[tuple[Path, str]]:
+                prod_dir: Path | None = None) -> list[tuple[Path, str]]:
         """条目 → [(源文件, 包内相对路径)]。
 
         ``entry_exempt=True``（有编译时）：入口文件可能由编译阶段产出，
@@ -197,9 +237,9 @@ class Builder:
             out.append((src, arc))
 
         for item in self.items():
-            if "path" in item:
-                rel = item["path"]
-                if item.get("derived"):
+            if item.path is not None:
+                rel = item.path
+                if item.derived:
                     # 编译产物入口：从产物树解析，缺失跳过（管线兜底）
                     if prod_dir is not None:
                         src = prod_dir / rel
@@ -208,16 +248,16 @@ class Builder:
                     continue
                 src = source_dir / rel
                 if not src.is_file():
-                    if entry_exempt and "entry" in item.get("tags", []):
+                    if entry_exempt and "entry" in item.tags:
                         # 入口文件可能由编译阶段产出（如 <插件名>.exe 在
                         # 处理器产物树中）；缺失与否由管线收集后兜底校验
                         continue
                     errors.append(f"打包内容文件不存在: {rel}")
                     continue
                 _append(src, rel)
-            elif "dir" in item:
-                rel = item["dir"]
-                if item.get("derived"):
+            elif item.dir is not None:
+                rel = item.dir
+                if item.derived:
                     # 编译产物目录（如 _internal/）：从产物树解析
                     if prod_dir is not None:
                         base = prod_dir / rel
@@ -234,7 +274,7 @@ class Builder:
                     if f.is_file():
                         _append(f, f"{rel}/{f.relative_to(base).as_posix()}")
             else:  # pattern
-                rel = item["pattern"]
+                rel = item.pattern
                 for matched in evaluate_pattern(source_dir, rel):
                     src = source_dir / matched
                     if src.is_file():

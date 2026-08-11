@@ -4,7 +4,7 @@ import datetime
 import threading
 from pathlib import Path
 from tkinter import filedialog, messagebox
-from typing import Any, Optional
+from typing import Any
 
 
 def _norm(p: str) -> str:
@@ -52,13 +52,13 @@ class App(ctk.CTk):
         self.grid_rowconfigure(2, weight=1)
 
         # -- state --
-        self._plugin_dir: Optional[str] = None
-        self._output_dir: Optional[str] = None
+        self._plugin_dir: str | None = None
+        self._output_dir: str | None = None
         self._output_auto = True
-        self._pm: Optional[ProjectManager] = None
+        self._pm: ProjectManager | None = None
         self._running = False
         self._build_success = False
-        self._canceller: Optional[Canceller] = None  # 当前构建的取消令牌
+        self._canceller: Canceller | None = None  # 当前构建的取消令牌
         # 错误高亮登记表：tab 名 → 当前高亮的控件集合（用于级联清除）
         self._error_fields: dict[str, set] = {"信息": set(), "构建": set()}
 
@@ -380,19 +380,13 @@ class App(ctk.CTk):
             # 「入口必须是单个文件」→ 定位到该入口条目行
             if any("入口必须是单个文件" in m for m in errors):
                 it = ctx.builder.entry_item()
-                if it:
-                    key = next((k for k in ("path", "dir", "pattern")
-                                if k in it), "")
-                    if key:
-                        rels.add(it[key])
+                if it is not None and it.path is not None:
+                    rels.add(it.path)
             # 「入口条目重复」→ 高亮所有 entry 条目行
             if any("入口条目重复" in m for m in errors):
                 for it in ctx.builder.items():
-                    if "entry" in it.get("tags", []):
-                        key = next((k for k in ("path", "dir", "pattern")
-                                    if k in it), "")
-                        if key:
-                            rels.add(it[key])
+                    if "entry" in it.tags and it.path is not None:
+                        rels.add(it.path)
             if rels:
                 self._dist_view.mark_errors(rels)
             # 区域级错误（如打包内容为空 / 缺少入口）→ 容器红框 + 提示

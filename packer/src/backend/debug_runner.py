@@ -8,7 +8,6 @@ import socket
 import subprocess
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 from backend.build_control import Canceller
 from backend.logbus import Logger
@@ -31,7 +30,7 @@ def detect_dghub(host: str = _DEFAULT_HOST, port: int = _DEFAULT_PORT,
 
 
 def fetch_token(host: str = _DEFAULT_HOST, port: int = _DEFAULT_PORT,
-                timeout: float = 2.0) -> Optional[str]:
+                timeout: float = 2.0) -> str | None:
     """从 DGHub 拉取会话 token（GET /api/plugins/_session_token）。"""
     try:
         url = f"http://{host}:{port}/api/plugins/_session_token"
@@ -47,7 +46,7 @@ def fetch_token(host: str = _DEFAULT_HOST, port: int = _DEFAULT_PORT,
 
 def run_process(cmd: list[str], cwd: Path, env: dict, logger: Logger,
                 source: str,
-                canceller: Optional[Canceller] = None) -> int:
+                canceller: Canceller | None = None) -> int:
     """启动常驻子进程，stdout/stderr 逐行送日志（external 块）；返回退出码。
 
     可取消：``canceller.cancel()`` 后终止进程树（Windows ``taskkill /T``）。
@@ -90,7 +89,7 @@ def run_process(cmd: list[str], cwd: Path, env: dict, logger: Logger,
     return returncode
 
 
-def build_for_debug(ctx, manifest_data: dict) -> Optional[Path]:
+def build_for_debug(ctx, manifest_data: dict) -> Path | None:
     """调试构建：no_zip 强制 folder（与项目发布目标配置无关，产物需立即运行）。
 
     ctx.output_dir 已由调用方组装为 ``plugin_dir/debug/``；本函数只临时覆盖
@@ -107,7 +106,7 @@ def build_for_debug(ctx, manifest_data: dict) -> Optional[Path]:
     return artifact
 
 
-def locate_debug_entry(ctx, artifact: Path) -> Optional[Path]:
+def locate_debug_entry(ctx, artifact: Path) -> Path | None:
     """产物文件夹内定位插件入口。
 
     Python 编译 = ``<插件名>.exe``；其余编译系统 = 打包内容 entry 条目
@@ -117,7 +116,7 @@ def locate_debug_entry(ctx, artifact: Path) -> Optional[Path]:
         exe = artifact / f"{ctx.plugin_name}.exe"
         return exe if exe.is_file() else None
     item = ctx.builder.entry_item()
-    if item is not None and "path" in item:
-        p = artifact / item["path"]
+    if item is not None and item.path is not None:
+        p = artifact / item.path
         return p if p.exists() else None
     return None

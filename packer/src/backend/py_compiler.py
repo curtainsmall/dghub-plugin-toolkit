@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from backend.logbus import Logger
 from backend.build_control import Canceller
@@ -102,12 +101,12 @@ def _check_pyinstaller(py_exe: list[str], logger: Logger) -> bool:
 def build_plugin_exe(
     plugin_dir: str,
     include_dghub_sdk: bool = True,
-    logger: Optional[Logger] = None,
+    logger: Logger | None = None,
     output_dir: str = "",
     source_dir: str = "",
     entry: str = "",
     dep_dir: str = "",
-    canceller: Optional[Canceller] = None,
+    canceller: Canceller | None = None,
 ) -> bool:
     """Build a self-contained .exe from a DGHub plugin directory (onedir).
 
