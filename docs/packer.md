@@ -161,11 +161,10 @@ dgpacker-cli build [插件目录] [--pypi-index URL] [--no-color]
 
 ## 项目配置（.dghub-sdk/project.json）
 
-配置由 GUI 管理，无需手写；格式为 format_version 2（顶层平铺 + builder 节）：
+配置由 GUI 管理，无需手写；格式为顶层平铺 + builder 节：
 
 ```json
 {
-  "format_version": 2,
   "compile_system": "python",
   "compile": "",
   "compile_dir": "",
@@ -183,8 +182,6 @@ dgpacker-cli build [插件目录] [--pypi-index URL] [--no-color]
 }
 ```
 
-旧格式（format_version 1）打开时自动迁移（字段归位、编译推断、`extra_files`
-去 dest 入 `files`、`target` 映射 `no_zip`），日志提示检查设置。
 
 ---
 

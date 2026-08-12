@@ -29,8 +29,7 @@ from gui.log_tab import LogTab
 from backend.logbus import Logger
 from backend.build_control import Canceller
 from gui.manifest_tab import ManifestTab
-from backend.project_manager import (ProjectManager, project_exists,
-                                     UnsupportedFormatError)
+from backend.project_manager import ProjectManager, project_exists
 from gui.settings_tab import SettingsTab
 from gui.widgets import ToolTip
 from backend import settings_store
@@ -680,14 +679,9 @@ class App(ctk.CTk):
         self._dir_label.configure(text=_norm_dir(d), text_color=("gray10", "gray90"))
         self._dir_path_frame.configure(border_width=0)
 
-        # Initialize project manager（旧格式破坏性升级：重置为默认值并日志提示）
+        # Initialize project manager
         self._pm = ProjectManager(d, log=self._logger)
-        try:
-            project = self._pm.read_project()
-        except UnsupportedFormatError as exc:
-            self._logger.error(str(exc))
-            self._pm = None
-            return
+        project = self._pm.read_project()
 
         # Push to all tabs
         self._info_view.set_plugin_dir(d, self._pm)

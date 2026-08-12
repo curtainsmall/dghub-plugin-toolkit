@@ -1,9 +1,8 @@
 """.dghub-sdk/ project configuration management.
 
-project.json 为唯一配置文件（format_version 2，顶层平铺 + builder 节）::
+project.json 为唯一配置文件（顶层平铺 + builder 节）::
 
     {
-      "format_version": 2,
       "compile_system": "python",      # 编译选择：""（无）/ "python" / "command"
       "compile": "",            # CommandCompiler 设置（compile_system="command" 时必填）
       "compile_dir": "",             # CommandCompiler 执行目录（空 = 项目根）
@@ -18,9 +17,6 @@ project.json 为唯一配置文件（format_version 2，顶层平铺 + builder �
 
 - 路径（manifest / compile_dir / output_dir）存相对插件目录的路径，跨盘符时回退绝对路径
 - 未知键在读-改-写时保留，不丢数据
-- 旧格式（format_version 1，build_systems 命名空间）执行破坏性迁移：
-  字段归位（compile_system 按 manifest/compile 推断、extra_files 去 dest 入
-  builder.files、target 映射 no_zip），并删除旧 deps.json（manifest.json 不受影响）
 - 编译入口（entry）为 Python 编译专属输入，由 PythonCompiler 从
   pyproject.toml 的 [tool.dghub].entry 现读，不入 project.json
 """
@@ -31,9 +27,6 @@ from pathlib import Path
 from typing import Any
 
 from backend.logbus import Logger
-
-# 当前支持的配置格式代数（仅破坏性变更时递增）
-_SUPPORTED_FORMAT = 2
 
 _MANIFEST_DEFAULTS: dict[str, Any] = {
     "id": "",
@@ -59,10 +52,6 @@ _BUILDER_DEFAULTS: dict[str, Any] = {
     "no_zip": False,
     "output_dir": "",
 }
-
-
-class UnsupportedFormatError(Exception):
-    """project.json 由更新版本的 Packer 创建，当前版本无法读取。"""
 
 
 class ProjectManager:
@@ -141,7 +130,7 @@ class ProjectManager:
         )
 
     # ------------------------------------------------------------------
-    # Project config（format_version 2，顶层平铺 + builder 节）
+    # Project config（顶层平铺 + builder 节）
     # ------------------------------------------------------------------
 
     def _load_json(self, name: str) -> Any:
@@ -155,39 +144,23 @@ class ProjectManager:
         return None
 
     def read_project(self) -> dict[str, Any]:
-        """读取并归一化 project.json；旧格式执行破坏性迁移。"""
+        """读取并归一化 project.json（顶层平铺 + builder 节）。"""
         raw = self._load_json("project.json")
-        deps_path = self._root / "deps.json"
-
-        if isinstance(raw, dict) and "format_version" in raw:
-            fv = raw["format_version"]
-            if isinstance(fv, int) and fv > _SUPPORTED_FORMAT:
-                raise UnsupportedFormatError(
-                    f"project.json 格式版本为 {fv}，当前仅支持 "
-                    f"{_SUPPORTED_FORMAT}：项目由更新版本的 Packer 创建，"
-                    "请升级 Packer")
-            if fv == _SUPPORTED_FORMAT and "builder" in raw:
-                data = self._fill_defaults(raw)
-                # v2 早期键 producer → compile_system（温和搬移，落盘一次）
-                if not data.get("compile_system") and data.get("producer"):
-                    data["compile_system"] = data["producer"]
-                    data.pop("producer", None)
-                    try:
-                        self.write_project(data)
-                    except OSError:
-                        pass
-                return data
-            # format_version 1 或结构不识别 → 破坏性迁移
-
-        had_legacy = (isinstance(raw, dict) and bool(raw)) \
-            or deps_path.is_file()
-        if had_legacy:
-            self._migrate_v1(raw or {}, deps_path)
-        return self._fill_defaults(self._load_json("project.json") or {})
+        if not isinstance(raw, dict):
+            return self._fill_defaults({})
+        data = self._fill_defaults(raw)
+        # 早期键 producer → compile_system（温和搬移，落盘一次）
+        if not data.get("compile_system") and data.get("producer"):
+            data["compile_system"] = data["producer"]
+            data.pop("producer", None)
+            try:
+                self.write_project(data)
+            except OSError:
+                pass
+        return data
 
     def write_project(self, data: dict[str, Any]) -> None:
         """Write project settings to `.dghub-sdk/project.json`."""
-        data.setdefault("format_version", _SUPPORTED_FORMAT)
         self._root.mkdir(parents=True, exist_ok=True)
         (self._root / "project.json").write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
@@ -207,66 +180,6 @@ class ProjectManager:
             builder["files"] = []
         data["builder"] = builder
         return data
-
-    def _migrate_v1(self, raw: dict[str, Any], deps_path: Path) -> None:
-        """旧版（format_version 1，build_systems 命名空间）破坏性迁移。"""
-        systems = raw.get("build_systems", {})
-        if not isinstance(systems, dict):
-            systems = {}
-        uv = systems.get("uv", {})
-        gen = systems.get("generic", {})
-
-        data = dict(_PROJECT_DEFAULTS)
-        data.update({
-            "format_version": _SUPPORTED_FORMAT,
-            # v1 entry/source_dir 弃用：编译入口由 PythonCompiler 从 pyproject 现读，
-            # 构建根统一为插件目录
-            "compile": gen.get("pre_build", ""),        # v1 旧键 pre_build
-            "compile_dir": gen.get("exec_dir", ""),     # v1 旧键 exec_dir
-            "manifest": uv.get("manifest", ""),
-            "include_sdk": bool(uv.get("include_sdk", True)),
-        })
-        # compile_system 推断：manifest 非空 → python；否则 compile 非空 → command
-        if data["manifest"]:
-            data["compile_system"] = "python"
-        elif data["compile"]:
-            data["compile_system"] = "command"
-        else:
-            data["compile_system"] = ""
-
-        # builder 节：extra_files 去 dest 入 files；target 映射 no_zip
-        builder = dict(_BUILDER_DEFAULTS)
-        files: list[dict[str, Any]] = []
-        extra = gen.get("extra_files", [])
-        if isinstance(extra, list):
-            for item in extra:
-                if not isinstance(item, dict):
-                    continue
-                new: dict[str, Any] = {}
-                if "path" in item:
-                    new["path"] = item["path"]
-                elif "pattern" in item:
-                    new["pattern"] = item["pattern"]
-                else:
-                    continue
-                tags = item.get("tags")
-                if isinstance(tags, list) and tags:
-                    new["tags"] = tags
-                files.append(new)
-        builder["files"] = files
-        builder["no_zip"] = (raw.get("target") == "folder")
-        builder["output_dir"] = raw.get("output_dir", "")
-        data["builder"] = builder
-
-        try:
-            self.write_project(data)
-            if deps_path.is_file():
-                deps_path.unlink()
-            self._note("检测到旧版配置，已迁移到新格式"
-                       "（manifest 不受影响），请检查设置", "warning")
-        except OSError as exc:
-            self._note(f"配置迁移落盘失败（{exc}），将在下次写入时重试",
-                       "warning")
 
     # ------------------------------------------------------------------
     # 字段便捷存取（顶层 / builder 节）

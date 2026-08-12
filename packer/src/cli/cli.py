@@ -19,7 +19,6 @@ from backend.logbus import Logger
 from backend.pipeline import BuildContext, run_build, validate
 from backend.project_manager import (
     ProjectManager,
-    UnsupportedFormatError,
 )
 
 try:
@@ -112,11 +111,7 @@ def cmd_build(args: argparse.Namespace, logger: Logger) -> int:
         return EXIT_USAGE
 
     pm = ProjectManager(plugin_dir, log=logger)
-    try:
-        pm.read_project()  # 触发旧格式迁移（仅迁移配置，不改用户代码）
-    except UnsupportedFormatError as exc:
-        logger.error(str(exc))
-        return EXIT_USAGE
+    pm.read_project()
 
     canceller = Canceller()
     _install_sigint(canceller)

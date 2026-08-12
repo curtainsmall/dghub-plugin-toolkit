@@ -9,18 +9,16 @@ from backend.builder import BuildError, evaluate_pattern
 from backend.packaging import package_plugin, cleanup_intermediates
 from backend.pipeline import fill_builder, run_build, validate
 from backend.compilers import COMPILERS, get_compiler
-from backend.project_manager import UnsupportedFormatError
 
 
 # ---------------------------------------------------------------------------
-# project_manager：format_version 2 配置
+# project_manager：配置读取/归一化
 # ---------------------------------------------------------------------------
 
 
 def test_defaults_fill(make_project):
     pm, _, _ = make_project()
     project = pm.read_project()
-    assert project["format_version"] == 2
     assert project["compile_system"] == ""
     assert project["include_sdk"] is True
     assert project["builder"] == {"files": [], "no_zip": False,
@@ -33,70 +31,6 @@ def test_unknown_keys_preserved(make_project):
     project["future_key"] = {"x": 1}
     pm.write_project(project)
     assert pm.read_project()["future_key"] == {"x": 1}
-
-
-def test_migration_v1(make_project, tmp_path):
-    """format_version 1（build_systems 命名空间）破坏性迁移。"""
-    plugin_dir = tmp_path / "legacy"
-    (plugin_dir / ".dghub-sdk").mkdir(parents=True)
-    (plugin_dir / ".dghub-sdk" / "manifest.json").write_text("{}")
-    (plugin_dir / ".dghub-sdk" / "project.json").write_text(json.dumps({
-        "format_version": 1,
-        "build_system": "uv",
-        "target": "folder",
-        "output_dir": "out",
-        "build_systems": {
-            "uv": {"manifest": "pyproject.toml", "entry": "src/main.py",
-                   "build_exe": False, "include_sdk": True},
-            "generic": {"source_dir": "", "entry": "", "pre_build": "",
-                        "exec_dir": "", "extra_files": [
-                            {"path": "assets/icon.png", "dest": "root"},
-                            {"pattern": "dist/**", "dest": "vendor"}]},
-        },
-    }))
-    from backend.project_manager import ProjectManager
-    pm = ProjectManager(str(plugin_dir))
-    project = pm.read_project()
-    assert project["format_version"] == 2
-    assert project["compile_system"] == "python"      # manifest 非空 → python
-    assert "entry" not in project      # v1 entry 弃用（Python 编译从 pyproject 现读）
-    assert project["manifest"] == "pyproject.toml"
-    assert project["include_sdk"] is True
-    assert project["builder"]["no_zip"] is True  # target=folder → no_zip
-    assert project["builder"]["output_dir"] == "out"
-    # extra_files 去 dest 入 files
-    assert project["builder"]["files"] == [
-        {"path": "assets/icon.png"},
-        {"pattern": "dist/**"},
-    ]
-
-
-def test_migration_producer_inference(make_project, tmp_path):
-    from backend.project_manager import ProjectManager
-    plugin_dir = tmp_path / "legacy2"
-    (plugin_dir / ".dghub-sdk").mkdir(parents=True)
-    (plugin_dir / ".dghub-sdk" / "manifest.json").write_text("{}")
-    (plugin_dir / ".dghub-sdk" / "project.json").write_text(json.dumps({
-        "format_version": 1,
-        "build_systems": {
-            "uv": {"manifest": "", "entry": "app.py", "include_sdk": False},
-            "generic": {"source_dir": "", "entry": "app.py",
-                        "pre_build": "dotnet build", "exec_dir": ""},
-        },
-    }))
-    pm = ProjectManager(str(plugin_dir))
-    project = pm.read_project()
-    assert project["compile_system"] == "command"     # 无 manifest → compile
-    assert project["compile"] == "dotnet build"
-
-
-def test_unsupported_format(make_project):
-    pm, _, _ = make_project()
-    project = pm.read_project()
-    project["format_version"] = 99
-    pm.write_project(project)
-    with pytest.raises(UnsupportedFormatError):
-        pm.read_project()
 
 
 def test_v2_producer_key_migrated(make_project):

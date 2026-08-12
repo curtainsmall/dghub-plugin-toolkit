@@ -18,7 +18,7 @@ from backend.project_manager import ProjectManager  # noqa: E402
 def make_project(tmp_path: Path):
     """项目工厂：创建插件目录 + ProjectManager + Builder。
 
-    返回 (pm, builder, plugin_dir)，project.json 已初始化（format_version 2）。
+    返回 (pm, builder, plugin_dir)，project.json 已初始化。
     """
 
     def _make(name: str = "testplugin") -> tuple[ProjectManager, Builder, Path]:
@@ -28,7 +28,7 @@ def make_project(tmp_path: Path):
             '{"id": "test", "name": "test", "version": "0.1.0"}',
             encoding="utf-8")
         pm = ProjectManager(str(plugin_dir))
-        pm.write_project({"format_version": 2})
+        pm.write_project({})
         return pm, Builder(pm), plugin_dir
 
     return _make
