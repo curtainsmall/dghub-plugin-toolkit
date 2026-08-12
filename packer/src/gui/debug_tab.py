@@ -177,7 +177,7 @@ class DebugTab(ctk.CTkFrame):
         # 清单格式与编译系统匹配性检查（优先级最高）
         manifest = ""
         if self._pm:
-            manifest = self._pm.read_project().get("manifest", "") or ""
+            manifest = self._pm.read_project().get("compiler", {}).get("manifest", "") or ""
         if manifest and not comp.is_known_manifest(Path(manifest).name):
             need = "package.json" if comp.id == "node" else "pyproject.toml"
             self._mode_hint.configure(
@@ -205,7 +205,7 @@ class DebugTab(ctk.CTkFrame):
     def _current_compiler(self):
         if not self._pm:
             return None
-        bs_id = self._pm.read_project().get("compile_system", "")
+        bs_id = self._pm.read_project().get("compiler", {}).get("compile_system", "")
         return get_compiler(bs_id)
 
     def _set_status(self, text: str,
@@ -288,16 +288,16 @@ class DebugTab(ctk.CTkFrame):
         """组装调试构建上下文：输出目录固定 插件目录/debug/。"""
         plugin_dir = Path(self._plugin_dir or ".")
         project = self._pm.read_project() if self._pm else {}
-        compile_system = project.get("compile_system", "")
+        compile_system = project.get("compiler", {}).get("compile_system", "")
         if compile_system == "python":
-            compile_cfg = {"manifest": project.get("manifest", ""),
+            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", ""),
                            "include_sdk": bool(
-                               project.get("include_sdk", True))}
+                               project.get("compiler", {}).get("include_sdk", True))}
         elif compile_system == "node":
-            compile_cfg = {"manifest": project.get("manifest", "")}
+            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
         elif compile_system == "command":
-            compile_cfg = {"compile": project.get("compile", ""),
-                           "compile_dir": project.get("compile_dir", "")}
+            compile_cfg = {"command": project.get("compiler", {}).get("command", ""),
+                           "compile_dir": project.get("compiler", {}).get("compile_dir", "")}
         else:
             compile_cfg = {}
         return BuildContext(

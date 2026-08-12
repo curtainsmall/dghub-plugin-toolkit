@@ -3,7 +3,7 @@
 打包内容 = 统一文件选择列表（``builder.files``），用户 / 编译 deduce /
 任何来源均可通过同一接口添加条目；特殊条目用 ``tags`` 标记——本计划定义
 ``entry`` 标签（主入口，manifest.entry 引用；必要条目，validate 保证恰好
-一个）。发布选项 = ``no_zip`` / ``output_dir``。
+一个）。发布选项 = ``output_dir``（发布形态固定 zip）。
 
 Builder 完全独立：只消费 builder.files 与发布选项，不引用编译配置、
 不引用顶层 entry（阶段 1 输入）。收集（resolve）时 arc 保留相对项目根的
@@ -77,6 +77,7 @@ class Builder:
 
     def __init__(self, pm: ProjectManager) -> None:
         self._pm = pm
+        self._no_zip_override: bool | None = None  # 调试 folder 内存覆盖（不落盘）
 
     # ------------------------------------------------------------------
     # 打包内容（用户 / 编译 / 任何来源均通过同一接口添加条目）
@@ -156,14 +157,18 @@ class Builder:
                       key=lambda it: it.derived, reverse=True)
 
     # ------------------------------------------------------------------
-    # 发布选项
+    # 发布选项（发布形态固定 zip；folder 仅调试用内存覆盖，不落盘）
     # ------------------------------------------------------------------
 
     def get_no_zip(self) -> bool:
-        return bool(self._pm.get_builder().get("no_zip", False))
+        """是否输出 folder（调试）。默认 False = zip 分发。"""
+        if self._no_zip_override is not None:
+            return self._no_zip_override
+        return False
 
     def set_no_zip(self, value: bool) -> None:
-        self._pm.set_builder_field("no_zip", bool(value))
+        """内存覆盖 folder 输出（调试构建用，不写入 project.json）。"""
+        self._no_zip_override = bool(value)
 
     def get_output_dir(self) -> str:
         return str(self._pm.get_builder().get("output_dir", ""))

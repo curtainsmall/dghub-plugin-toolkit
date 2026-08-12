@@ -19,7 +19,6 @@ from backend.logbus import Logger
 from backend.pipeline import BuildContext, run_build, validate
 from backend.project_manager import (
     ProjectManager,
-    UnsupportedFormatError,
 )
 
 try:
@@ -70,24 +69,24 @@ def _make_ctx(pm: ProjectManager, plugin_dir: str, logger: Logger,
               pypi_index: str) -> BuildContext:
     """从 project.json 组装 BuildContext（只读）。"""
     project = pm.read_project()
-    compile_system = project.get("compile_system", "")
+    compile_system = project.get("compiler", {}).get("compile_system", "")
     out_cfg = project.get("builder", {})
     output_dir = (pm.to_absolute(out_cfg.get("output_dir", ""))
                   or str(Path(plugin_dir) / "output"))
     match compile_system:
         case "python":
             compile_cfg = {
-                "manifest": project.get("manifest", ""),
-                "include_sdk": bool(project.get("include_sdk", True)),
+                "manifest": project.get("compiler", {}).get("manifest", ""),
+                "include_sdk": bool(project.get("compiler", {}).get("include_sdk", True)),
             }
         case "node":
             compile_cfg = {
-                "manifest": project.get("manifest", ""),
+                "manifest": project.get("compiler", {}).get("manifest", ""),
             }
         case "command":
             compile_cfg = {
-                "compile": project.get("compile", ""),
-                "compile_dir": project.get("compile_dir", ""),
+                "command": project.get("compiler", {}).get("command", ""),
+                "compile_dir": project.get("compiler", {}).get("compile_dir", ""),
             }
         case _:
             compile_cfg = {}
@@ -112,11 +111,7 @@ def cmd_build(args: argparse.Namespace, logger: Logger) -> int:
         return EXIT_USAGE
 
     pm = ProjectManager(plugin_dir, log=logger)
-    try:
-        pm.read_project()  # 触发旧格式迁移（仅迁移配置，不改用户代码）
-    except UnsupportedFormatError as exc:
-        logger.error(str(exc))
-        return EXIT_USAGE
+    pm.read_project()
 
     canceller = Canceller()
     _install_sigint(canceller)

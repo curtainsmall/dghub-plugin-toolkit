@@ -106,7 +106,7 @@ class BuildTab(ctk.CTkFrame):
                                 command=self._add_dir)
         dir_btn.pack(side="left", padx=(5, 0))
         rule_btn = ctk.CTkButton(add_frame, text="添加规则", width=90,
-                                 command=self._show_rule_input)
+                                 command=self._add_rule)
         rule_btn.pack(side="left", padx=(5, 0))
         fill_btn = ctk.CTkButton(
             left, text="从编译填充", width=110,
@@ -129,23 +129,6 @@ class BuildTab(ctk.CTkFrame):
         self._add_hint_lbl.grid_remove()
 
         # 规则输入行（默认隐藏）
-        self._rule_input = ctk.CTkFrame(left, fg_color="transparent")
-        self._rule_input.grid(row=3, column=1, columnspan=3, sticky="ew",
-                              padx=5, pady=(0, 5))
-        self._rule_input.grid_columnconfigure(0, weight=1)
-        self._rule_entry = ctk.CTkEntry(self._rule_input,
-                                        placeholder_text="glob 规则，如 dist/**")
-        self._rule_entry._is_focused = False
-        self._rule_entry.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        self._rule_entry.bind("<Return>", lambda _: self._confirm_rule())
-        ctk.CTkButton(self._rule_input, text="确认", width=50,
-                      command=self._confirm_rule).grid(row=0, column=1,
-                                                       padx=(0, 5))
-        ctk.CTkButton(self._rule_input, text="取消", width=50,
-                      fg_color="transparent",
-                      hover_color=("gray70", "gray40"),
-                      command=self._hide_rule_input).grid(row=0, column=2)
-        self._rule_input.grid_remove()
 
         # 条目列表
         self._item_list = ctk.CTkScrollableFrame(left, fg_color="transparent")
@@ -264,24 +247,53 @@ class BuildTab(ctk.CTkFrame):
         except Exception:
             pass
 
-    def _show_rule_input(self) -> None:
-        self._rule_input.grid()
-        self._rule_entry.focus_set()
+    def _add_rule(self) -> None:
+        """添加规则（对话框输入 glob pattern——与添加文件/目录交互一致）。"""
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("添加规则")
+        dlg.geometry("360x160")
+        dlg.resizable(False, False)
+        dlg.transient(self.winfo_toplevel())
+        dlg.grab_set()
+        # 简单居中（父窗口中心偏移）
+        self.winfo_toplevel().update_idletasks()
+        x = self.winfo_toplevel().winfo_rootx() + 80
+        y = self.winfo_toplevel().winfo_rooty() + 120
+        dlg.geometry(f"360x160+{x}+{y}")
 
-    def _hide_rule_input(self) -> None:
-        self._rule_entry.delete(0, "end")
-        self._rule_input.grid_remove()
+        ctk.CTkLabel(dlg, text="规则 (glob):").grid(
+            row=0, column=0, padx=10, pady=(10, 0), sticky="w")
+        entry = ctk.CTkEntry(dlg, width=250, placeholder_text="dist/**")
+        entry._is_focused = False
+        entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
+        entry.focus_set()
+        ctk.CTkLabel(
+            dlg, text="相对插件目录的 glob；不支持 ../ 跨目录引用",
+            text_color=("gray50", "gray60"),
+            font=ctk.CTkFont(size=11),
+        ).grid(row=1, column=0, columnspan=2, padx=10, sticky="w")
 
-    def _confirm_rule(self) -> None:
-        pattern = self._rule_entry.get().strip()
-        if pattern:
+        def on_ok() -> None:
+            pattern = entry.get().strip()
+            if not pattern:
+                return
             b = self._builder()
             if b is not None:
                 b.add_rule(pattern)
-                self.clear_errors()  # 内容已变，清除旧错误高亮
+                self.clear_errors()  # 内容已变，错误提示可清除
                 self._refresh_item_list()
                 self._refresh_preview()
-        self._hide_rule_input()
+            dlg.destroy()
+
+        btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_row.grid(row=2, column=0, columnspan=2, sticky="e",
+                     pady=(15, 10))
+        ctk.CTkButton(btn_row, text="取消", width=100,
+                      command=dlg.destroy).pack(side="right", padx=5)
+        ctk.CTkButton(btn_row, text="确定", width=100,
+                      command=on_ok).pack(side="right", padx=5)
+        entry.bind("<Return>", lambda _e: on_ok())
+        dlg.wait_window()
 
     def _fill_builder_clicked(self) -> None:
         self.clear_errors()  # 内容可能变化，先清旧错误高亮
@@ -543,11 +555,11 @@ class BuildTab(ctk.CTkFrame):
             win.destroy()
 
         btns = ctk.CTkFrame(win, fg_color="transparent")
-        btns.pack(fill="x", padx=16, pady=(16, 12))
+        btns.pack(fill="x")
         ctk.CTkButton(btns, text="取消", width=70,
-                      command=win.destroy).pack(side="right")
+                      command=win.destroy).pack(side="right", padx=5)
         ctk.CTkButton(btns, text="确定", width=70,
-                      command=_ok).pack(side="right", padx=(8, 0))
+                      command=_ok).pack(side="right", padx=5)
         self.wait_window(win)
         if not result:
             return None

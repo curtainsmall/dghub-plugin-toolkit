@@ -155,14 +155,14 @@ class CommandCompiler(Compiler):
     label = "自定义命令"
     description = "构建前执行用户命令（如编译、生成资源），产物由打包内容声明"
     fields = {
-        "compile": {"label": "编译命令", "type": "str",
+        "command": {"label": "编译命令", "type": "str",
                       "default": "", "required": True},
         "compile_dir": {"label": "执行目录", "type": "str",
                      "default": "", "required": False},
     }
 
     def enabled(self, cfg: dict[str, Any]) -> bool:
-        return bool(cfg.get("compile"))
+        return bool(cfg.get("command"))
 
     def probe(self, plugin_dir: Path) -> dict[str, Any] | None:
         return None
@@ -173,7 +173,7 @@ class CommandCompiler(Compiler):
         return None
 
     def run(self, ctx: CompilerContext) -> bool:
-        cmd = (ctx.cfg.get("compile") or "").strip()
+        cmd = (ctx.cfg.get("command") or "").strip()
         if not cmd:
             ctx.log.error("编译命令为空")
             return False

@@ -32,13 +32,11 @@ def test_build_success(tmp_path, capsys):
     """无编译（纯收集）：entry 产物 + 资源 → zip，退出码 0。"""
     root = tmp_path / "proj"
     _write_project(root, {
-        "format_version": 2,
-        "compile_system": "",
+            "compile_system": "",
         "entry": "main.py",
         "builder": {
             "files": [{"path": "main.py", "tags": ["entry"]},
                       {"dir": "assets"}],
-            "no_zip": False,
             "output_dir": "",
         },
     }, {"main.py": "print('hi')\n", "assets/data.json": "{}\n"})
@@ -56,10 +54,9 @@ def test_build_missing_entry(tmp_path, capsys):
     """缺 entry 条目 → 校验失败退出码 3。"""
     root = tmp_path / "proj"
     _write_project(root, {
-        "format_version": 2,
-        "compile_system": "",
+            "compiler": {"compile_system": ""},
         "entry": "main.py",
-        "builder": {"files": [], "no_zip": False, "output_dir": ""},
+        "builder": {"files": [], "output_dir": ""},
     }, {"main.py": "print('hi')\n"})
     code = dispatch(["build", str(root), "--no-color"])
     assert code == EXIT_VALIDATE
@@ -87,26 +84,24 @@ def test_build_no_color_position(tmp_path, capsys):
     """--no-color 支持子命令后置（CI 习惯写法）。"""
     root = tmp_path / "proj"
     _write_project(root, {
-        "format_version": 2,
-        "compile_system": "",
+            "compile_system": "",
         "entry": "main.py",
         "builder": {"files": [{"path": "main.py", "tags": ["entry"]}],
-                    "no_zip": True, "output_dir": ""},
+                    "output_dir": ""},
     }, {"main.py": "x"})
     code = dispatch(["build", str(root), "--no-color"])
     assert code == EXIT_OK
-    assert (root / "output" / "proj").is_dir()  # no_zip 出 folder；包名默认 = 插件目录名
+    assert (root / "output" / "proj.zip").is_file()  # 发布固定 zip
 
 
 def test_build_no_project_readonly(tmp_path, capsys):
     """CLI 不修改项目配置：构建后 project.json 原样。"""
     root = tmp_path / "proj"
     project = {
-        "format_version": 2,
-        "compile_system": "",
+        "compiler": {"compile_system": ""},
         "entry": "main.py",
         "builder": {"files": [{"path": "main.py", "tags": ["entry"]}],
-                    "no_zip": True, "output_dir": ""},
+                    "output_dir": ""},
     }
     _write_project(root, project, {"main.py": "x"})
     before = (root / ".dghub-sdk" / "project.json").read_bytes()

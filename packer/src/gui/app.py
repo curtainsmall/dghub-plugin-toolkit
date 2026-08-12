@@ -29,8 +29,7 @@ from gui.log_tab import LogTab
 from backend.logbus import Logger
 from backend.build_control import Canceller
 from gui.manifest_tab import ManifestTab
-from backend.project_manager import (ProjectManager, project_exists,
-                                     UnsupportedFormatError)
+from backend.project_manager import ProjectManager, project_exists
 from gui.settings_tab import SettingsTab
 from gui.widgets import ToolTip
 from backend import settings_store
@@ -47,7 +46,7 @@ class App(ctk.CTk):
 
         self.title(self.TITLE)
         self.geometry(self.WINDOW_SIZE)
-        self.minsize(900, 600)
+        self.minsize(1400, 1000)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
@@ -369,7 +368,7 @@ class App(ctk.CTk):
             # 入口缺失不豁免 → 进入条目级高亮
             ctx.builder.resolve(
                 ctx.source_dir,
-                entry_exempt=bool(ctx.compile_cfg.get("compile")
+                entry_exempt=bool(ctx.compile_cfg.get("command")
                                   or ctx.compile_cfg.get("manifest")))
         except BuildError as exc:
             errors += exc.errors
@@ -574,13 +573,14 @@ class App(ctk.CTk):
             dialog.destroy()
 
         btns = ctk.CTkFrame(dialog, fg_color="transparent")
-        btns.pack(padx=24, pady=(10, 24))
-        ctk.CTkButton(btns, text="忽略此版本", width=100,
-                      command=_on_ignore).pack(side="left", padx=5)
-        ctk.CTkButton(btns, text="安装" if has_installer else "下载",
-                      width=100, command=_on_ok).pack(side="left", padx=5)
+        btns.pack()
+        # 右对齐：side=right 从右向左排，pack 顺序与显示顺序相反；padx=5 统一间距
         ctk.CTkButton(btns, text="取消", width=100,
-                      command=_on_cancel).pack(side="left", padx=5)
+                      command=_on_cancel).pack(side="right", padx=5)
+        ctk.CTkButton(btns, text="安装" if has_installer else "下载",
+                      width=100, command=_on_ok).pack(side="right", padx=5)
+        ctk.CTkButton(btns, text="忽略此版本", width=100,
+                      command=_on_ignore).pack(side="right", padx=5)
 
         # 居中于主窗口
         dialog.update_idletasks()
@@ -679,14 +679,9 @@ class App(ctk.CTk):
         self._dir_label.configure(text=_norm_dir(d), text_color=("gray10", "gray90"))
         self._dir_path_frame.configure(border_width=0)
 
-        # Initialize project manager（旧格式破坏性升级：重置为默认值并日志提示）
+        # Initialize project manager
         self._pm = ProjectManager(d, log=self._logger)
-        try:
-            project = self._pm.read_project()
-        except UnsupportedFormatError as exc:
-            self._logger.error(str(exc))
-            self._pm = None
-            return
+        project = self._pm.read_project()
 
         # Push to all tabs
         self._info_view.set_plugin_dir(d, self._pm)

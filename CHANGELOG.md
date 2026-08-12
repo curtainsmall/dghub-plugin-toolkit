@@ -7,23 +7,44 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（版本跳号为预期行为）。
 
+## [0.10.0] - 2026-08-13
+
+### 新增
+
+- **Packer**：信息页字段编辑改为右侧内联详情面板——分组与字段的查看/编辑
+  移入面板内，移除 JSON 预览与字段/分组编辑对话框；添加分组/字段直接创建并
+  自动选中；选中模型统一，分组选中联动选中其第一个字段
+
+### 修复
+
+- **Packer**：切换字段类型时条件行即时显隐；删除字段后写回磁盘
+- **Packer**：构建页规则添加改为对话框，修复输入行与按钮行重叠
+
+### 变更
+
+- **Packer**：project.json 编译字段收敛为 `compiler` 节；移除 `format_version`
+  版本机制与 `no_zip` 配置——v0.x 阶段每次格式变更视为唯一格式，
+  不再提供旧结构迁移
+- **Packer**：主窗口最小尺寸提升至 1400x1000
+- **Packer**：CommandCompiler 配置键 `compile` 更名为 `command`
+- **docs**：移除 Packer 使用指南，新增 CLI 文档，含 `.dghub-sdk` 项目结构说明；
+  SDK 使用指南精简为功能/API 层
+
 ## [0.9.0] - 2026-08-11
 
 ### 新增
 
-- **Packer**：构建页「包名」输入框——自定义输出包名（zip/目录名），
-  留空默认使用插件目录名
-- **Packer**：编译产物条目在打包内容列表置顶显示（derived 优先，稳定排序）
+- **Packer**：构建页「包名」输入框——自定义输出包名，留空默认使用插件目录名
+- **Packer**：编译产物条目在打包内容列表置顶显示
 
 ### 修复
 
-- **Packer**：placeholder 提示统一修复（CTkEntry 初始焦点态修正 + 空值加载
-  不再撤销提示）；DGHub 检测中提示改为黄色
+- **Packer**：placeholder 提示统一修复；DGHub 检测中提示改为黄色
 
 ### 变更
 
-- **Packer**：Builder 条目改为 BuilderItem dataclass（持久化形状不变）；
-  类型注解统一 `X | None`（PEP 604，移除 Optional）；清除源码 BOM
+- **Packer**：Builder 条目改为 BuilderItem dataclass；类型注解统一 `X | None`；
+  清除源码 BOM
 
 ## [0.8.0] - 2026-08-09
 

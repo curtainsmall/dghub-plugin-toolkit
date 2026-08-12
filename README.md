@@ -57,17 +57,17 @@ while (running) {
 
 位于 `packer/`，图形化桌面应用，帮助开发者打包和分发 DGHub 插件（纯 GUI 工具）。
 
-- 两阶段构建 — compile 编译（Python uv+PyInstaller / Node npm+SEA / 自定义命令 / 无）→ 统一 build 步骤；编译入口由清单声明（Python `pyproject.toml` 的 `[tool.dghub].entry`、Node `package.json` 的 `main`），Packer 直接读取，无需在 GUI 重复填写
-- 插件信息编辑 — 可视化填写元信息与 `config_schema`，产物 `manifest.json` 构建时自动生成
-- 依赖管理 — 依赖由项目自身清单（`pyproject.toml`）声明，自动下载并打进自包含 exe（onedir）
-- 打包内容 — 文件 / 目录 / 规则三种条目、`入口` 标记；Python 编译产物（exe + `_internal/`）自动显式声明，编译时从产物树兑现；双击条目查看完整路径 / 重选 / 改标签；校验错误条目级红框高亮
-- 发布 — `.zip`（分发）或文件夹（调试），Python 项目自动构建为独立 exe
+- 构建 — 编译（Python / Node (TypeScript) / 自定义命令 / 无）→ 打包；编译入口由项目清单声明，无需在 GUI 填写
+- 插件信息编辑 — 可视化填写元信息与 `config_schema`（分组/字段编辑器），产物 `manifest.json` 构建时自动生成
+- 依赖管理 — 依赖由项目自身清单声明，自动下载并打进自包含 exe
+- 打包内容 — 文件 / 目录 / 规则三种条目 + 入口标记；编译产物自动声明；校验错误条目级高亮
+- 发布 — 固定 `.zip` 分发，Python 项目自动构建为独立 exe
 - 本地调试 — 调试 tab：调试源码（uv run）或调试运行（构建后运行产物），支持自动检测 DGHub 拉取令牌
 - 自动更新 — 启动检查 GitHub 最新正式版，下载 / 安装 / 忽略此版本
 
 ### 下载
 
-从 [Releases](https://github.com/curtainsmall/dghub-sdk-toolkit/releases) 下载 `dghub-sdk-packer-setup.exe` 安装（每用户，无需管理员）。安装后：开始菜单「DGHub SDK Packer」启动 GUI；安装目录已入 PATH，CI 可用 `dgpacker-cli build`（只读构建，详见 [使用指南](docs/packer.md#ci-构建dgpacker-cli)）。
+从 [Releases](https://github.com/curtainsmall/dghub-sdk-toolkit/releases) 下载 `dghub-sdk-packer-setup.exe` 安装（每用户，无需管理员）。安装后：开始菜单「DGHub SDK Packer」启动 GUI；安装目录已入 PATH，CI 可用 `dgpacker-cli build`（只读构建，详见 [Packer CLI 文档](docs/packer-cli.md)）。
 
 ### 从源码运行
 
@@ -81,8 +81,6 @@ uv run --project packer python packer/src/gui/main.py
 # 构建 Windows 安装器（需 Inno Setup 6）
 uv run --project packer python packer/build.py
 ```
-
-详细用法参见 [DGHub SDK Packer 使用指南](docs/packer.md)。
 
 ## Demo
 

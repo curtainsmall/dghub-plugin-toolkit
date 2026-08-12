@@ -192,7 +192,9 @@ class CompileTab(ctk.CTkFrame):
         # 编译系统变化 → 按新编译重新标注依赖清单（✓/未知/未选择）
         self._refresh_manifest_label()
         if self._pm:
-            self._pm.set_field("compile_system", self._compile_id())
+            section = dict(self._pm.get_field("compiler") or {})
+            section["compile_system"] = self._compile_id()
+            self._pm.set_field("compiler", section)
         self._check_pyinstaller_bg()  # Python 选中时后台预检
         if self._on_changed:
             self._on_changed()
@@ -342,15 +344,15 @@ class CompileTab(ctk.CTkFrame):
             self._loading = True
             try:
                 project = self._pm.read_project()
-                cid = project.get("compile_system", "")
+                cid = project.get("compiler", {}).get("compile_system", "")
                 label = next((cl for c, cl in COMPILER_CHOICES if c == cid),
                              COMPILER_CHOICES[0][1])
                 self._proc_menu.set(label)
-                self._manifest_var.set(project.get("manifest", ""))
+                self._manifest_var.set(project.get("compiler", {}).get("manifest", ""))
                 self._include_sdk_var.set(
-                    bool(project.get("include_sdk", True)))
-                self._compile_var.set(project.get("compile", ""))
-                rel_exec = project.get("compile_dir", "")
+                    bool(project.get("compiler", {}).get("include_sdk", True)))
+                self._compile_var.set(project.get("compiler", {}).get("command", ""))
+                rel_exec = project.get("compiler", {}).get("compile_dir", "")
                 self._compile_dir = (self._pm.to_absolute(rel_exec)
                                   if rel_exec else "")
                 self._refresh_exec_display()
@@ -367,12 +369,14 @@ class CompileTab(ctk.CTkFrame):
         if not self._pm:
             return
         project = self._pm.read_project()
-        project["compile_system"] = self._compile_id()
-        project["manifest"] = self._manifest_var.get()
-        project["include_sdk"] = self._include_sdk_var.get()
-        project["compile"] = self._compile_var.get()
-        project["compile_dir"] = (self._pm.to_relative(self._compile_dir)
-                               if self._compile_dir else "")
+        project.setdefault("compiler", {})
+        compiler = project["compiler"]
+        compiler["compile_system"] = self._compile_id()
+        compiler["manifest"] = self._manifest_var.get()
+        compiler["include_sdk"] = self._include_sdk_var.get()
+        compiler["command"] = self._compile_var.get()
+        compiler["compile_dir"] = (self._pm.to_relative(self._compile_dir)
+                                 if self._compile_dir else "")
         self._pm.write_project(project)
 
     def get_compile_system(self) -> str:
@@ -387,7 +391,7 @@ class CompileTab(ctk.CTkFrame):
         if cid == "node":
             return {"manifest": self._manifest_var.get()}
         if cid == "command":
-            return {"compile": self._compile_var.get(),
+            return {"command": self._compile_var.get(),
                     "compile_dir": self._compile_dir}
         return {}
 
