@@ -36,7 +36,7 @@ Packer 把「源码项目 → DGHub 插件包」拆成两阶段：
       │
       ▼
 阶段 2：统一构建步骤（对所有编译一致）
-   收集打包内容 + 编译产物 → 生成 manifest.json → 组装 zip / 文件夹
+   收集打包内容 + 编译产物 → 生成 manifest.json → 组装 zip
 ```
 
 插件包结构（通用）：`manifest.json + 入口产物 + 其它资源（保留相对路径）`。
@@ -57,7 +57,7 @@ SEA exe（含 Node 运行时）+ `node_modules/` + 入口目录，收集时整�
 2. **编译页** — 下拉单选编译（无 / Python / Node / 自定义命令），并按所选编译填写设置（见下）
 3. **信息页** — 填写插件元信息与配置 schema，产物 `manifest.json` 构建时自动生成
 4. **构建页** — 打包内容（文件/目录/规则，可标记入口；Python 编译产物自动显式声明）与发布选项
-5. **构建** — 导出 `.zip`（分发）或文件夹（调试）
+5. **构建** — 导出 `.zip`（分发）
 6. **调试页** — 本地运行插件（调试源码 / 调试运行）
 
 ### 编译
@@ -125,7 +125,7 @@ Python 编译打包的 exe 完全自包含：依赖打进 `_internal/`，**DGHub
 
 构建全过程输出集中显示：校验、compile、依赖安装、PyInstaller、打包逐步记录；校验失败与构建错误在此给出具体原因；旧版配置迁移等提示也记录于此。
 
-- 分级着色：**错误**（红）/ **警告**（橙）/ **成功**（绿，仅最终产物 zip / 文件夹）三类着色，其余为普通信息（默认色）
+- 分级着色：**错误**（红）/ **警告**（橙）/ **成功**（绿，仅最终产物 zip / 调试文件夹）三类着色，其余为普通信息（默认色）
 - 外部工具（uv / PyInstaller 等）的原始输出以 `─── 来源 ───` 分隔块成段展示，并标注退出码
 - 日志不自动清空：每次构建前插入 `━━━ 构建 时间 ━━━` 分隔行、历史累积，便于回看与对比；右上角「清空」按钮可手动清空
 
@@ -161,25 +161,32 @@ dgpacker-cli build [插件目录] [--pypi-index URL] [--no-color]
 
 ## 项目配置（.dghub-sdk/project.json）
 
-配置由 GUI 管理，无需手写；格式为顶层平铺 + builder 节：
+配置由 GUI 管理，无需手写；格式为 compiler 节 + builder 节：
 
 ```json
 {
-  "compile_system": "python",
-  "compile": "",
-  "compile_dir": "",
-  "manifest": "pyproject.toml",
-  "include_sdk": true,
+  "compiler": {
+    "compile_system": "python",
+    "compile": "",
+    "compile_dir": "",
+    "manifest": "pyproject.toml",
+    "include_sdk": true
+  },
   "builder": {
     "files": [
       { "path": "my-plugin.exe", "tags": ["entry"] },
       { "dir": "assets" },
       { "pattern": "dist/**" }
     ],
-    "output_dir": ""
+    "output_dir": "",
+    "packer_name": ""
   }
 }
 ```
+
+- 编译配置集中在 `compiler` 节；`packer_name` 为自定义包名
+- 发布形态固定 `.zip`
+- 未知键在读-改-写时保留，不丢数据
 
 
 ---
