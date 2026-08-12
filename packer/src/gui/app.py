@@ -368,7 +368,7 @@ class App(ctk.CTk):
             # 入口缺失不豁免 → 进入条目级高亮
             ctx.builder.resolve(
                 ctx.source_dir,
-                entry_exempt=bool(ctx.compile_cfg.get("compile")
+                entry_exempt=bool(ctx.compile_cfg.get("command")
                                   or ctx.compile_cfg.get("manifest")))
         except BuildError as exc:
             errors += exc.errors

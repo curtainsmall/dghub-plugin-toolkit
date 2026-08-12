@@ -296,7 +296,7 @@ class DebugTab(ctk.CTkFrame):
         elif compile_system == "node":
             compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
         elif compile_system == "command":
-            compile_cfg = {"compile": project.get("compiler", {}).get("compile", ""),
+            compile_cfg = {"command": project.get("compiler", {}).get("command", ""),
                            "compile_dir": project.get("compiler", {}).get("compile_dir", "")}
         else:
             compile_cfg = {}

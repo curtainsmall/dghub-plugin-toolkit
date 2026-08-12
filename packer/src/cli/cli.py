@@ -85,7 +85,7 @@ def _make_ctx(pm: ProjectManager, plugin_dir: str, logger: Logger,
             }
         case "command":
             compile_cfg = {
-                "compile": project.get("compiler", {}).get("compile", ""),
+                "command": project.get("compiler", {}).get("command", ""),
                 "compile_dir": project.get("compiler", {}).get("compile_dir", ""),
             }
         case _:

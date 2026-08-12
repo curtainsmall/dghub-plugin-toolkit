@@ -287,12 +287,12 @@ def test_run_build_command_compiler(make_project, make_ctx, tmp_path):
         "Path('out/plugin.exe').write_bytes(b'exe')\n")
     # compile 在插件目录执行，产出 out/plugin.exe
     pm.set_field("compile_system", "command")
-    pm.set_field("compile", f"python {script.as_posix()}")
+    pm.set_field("command", f"python {script.as_posix()}")
     (plugin_dir / "out").mkdir()
     (plugin_dir / "out" / "plugin.exe").write_bytes(b"exe")
     b.add_file("out/plugin.exe", ["entry"])
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="command",
-                      compile_cfg={"compile": f"python {script.as_posix()}",
+                      compile_cfg={"command": f"python {script.as_posix()}",
                                    "compile_dir": ""})
     ok = run_build(ctx, {"id": "t", "name": "t"})
     assert ok is not None, "command compiler build should succeed"

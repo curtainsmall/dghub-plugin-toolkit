@@ -5,7 +5,7 @@ project.json 为唯一配置文件（compiler 节 + builder 节）::
     {
       "compiler": {
         "compile_system": "python",  # 编译选择：""（无）/ "python" / "command"
-        "compile": "",        # CommandCompiler 设置（compile_system="command" 时必填）
+        "command": "",       # CommandCompiler 设置（compile_system="command" 时必填）
         "compile_dir": "",    # CommandCompiler 执行目录（空 = 项目根）
         "manifest": "",       # PythonCompiler 设置（compile_system="python" 时必填）
         "include_sdk": true   # PythonCompiler 选项：是否打包 dghub-sdk
@@ -41,7 +41,7 @@ _MANIFEST_DEFAULTS: dict[str, Any] = {
 # compiler 节默认值（compile_system 显式单选："" 无 / "python" / "command"）
 _COMPILER_DEFAULTS: dict[str, Any] = {
     "compile_system": "",
-    "compile": "",
+    "command": "",
     "compile_dir": "",
     "manifest": "",
     "include_sdk": True,

@@ -71,7 +71,7 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
 
     # 1) probe：编译设置为空时探测项目，建议编译设置（落盘）
     if not ctx.compile_cfg.get("manifest") \
-            and not ctx.compile_cfg.get("compile"):
+            and not ctx.compile_cfg.get("command"):
         suggest = comp.probe(ctx.plugin_dir)
         if suggest:
             section = dict(ctx.pm.get_field("compiler") or {})
@@ -138,7 +138,7 @@ def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Path | None:
     # Builder 条目（arc 保留相对路径）；无实际编译输入时入口缺失不豁免
     out_files += ctx.builder.resolve(
         ctx.source_dir,
-        entry_exempt=bool(ctx.compile_cfg.get("compile")
+        entry_exempt=bool(ctx.compile_cfg.get("command")
                           or ctx.compile_cfg.get("manifest")),
         prod_dir=prod_dir)
 
