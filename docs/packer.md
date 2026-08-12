@@ -176,7 +176,6 @@ dgpacker-cli build [插件目录] [--pypi-index URL] [--no-color]
       { "dir": "assets" },
       { "pattern": "dist/**" }
     ],
-    "no_zip": false,
     "output_dir": ""
   }
 }

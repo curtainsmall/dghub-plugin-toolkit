@@ -10,7 +10,6 @@ project.json 为唯一配置文件（顶层平铺 + builder 节）::
       "include_sdk": true,        # PythonCompiler 选项：是否打包 dghub-sdk
       "builder": {
         "files": [],              # 统一文件选择列表：[{"path"|"dir"|"pattern", "tags"}]
-        "no_zip": false,          # 发布形态：false = zip（默认）；true = folder
         "output_dir": ""          # 输出目录（空 = 插件目录/output）
       }
     }
@@ -49,7 +48,6 @@ _PROJECT_DEFAULTS: dict[str, Any] = {
 # builder 节默认值（files = 统一文件选择列表，条目 {path|dir|pattern, tags}）
 _BUILDER_DEFAULTS: dict[str, Any] = {
     "files": [],
-    "no_zip": False,
     "output_dir": "",
 }
 
@@ -149,6 +147,8 @@ class ProjectManager:
         if not isinstance(raw, dict):
             return self._fill_defaults({})
         data = self._fill_defaults(raw)
+        # 已废弃键 no_zip 清除（发布形态固定 zip；folder 仅调试内存覆盖）
+        data.get("builder", {}).pop("no_zip", None)
         # 早期键 producer → compile_system（温和搬移，落盘一次）
         if not data.get("compile_system") and data.get("producer"):
             data["compile_system"] = data["producer"]

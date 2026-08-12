@@ -37,7 +37,6 @@ def test_build_success(tmp_path, capsys):
         "builder": {
             "files": [{"path": "main.py", "tags": ["entry"]},
                       {"dir": "assets"}],
-            "no_zip": False,
             "output_dir": "",
         },
     }, {"main.py": "print('hi')\n", "assets/data.json": "{}\n"})
@@ -57,7 +56,7 @@ def test_build_missing_entry(tmp_path, capsys):
     _write_project(root, {
             "compile_system": "",
         "entry": "main.py",
-        "builder": {"files": [], "no_zip": False, "output_dir": ""},
+        "builder": {"files": [], "output_dir": ""},
     }, {"main.py": "print('hi')\n"})
     code = dispatch(["build", str(root), "--no-color"])
     assert code == EXIT_VALIDATE
@@ -88,11 +87,11 @@ def test_build_no_color_position(tmp_path, capsys):
             "compile_system": "",
         "entry": "main.py",
         "builder": {"files": [{"path": "main.py", "tags": ["entry"]}],
-                    "no_zip": True, "output_dir": ""},
+                    "output_dir": ""},
     }, {"main.py": "x"})
     code = dispatch(["build", str(root), "--no-color"])
     assert code == EXIT_OK
-    assert (root / "output" / "proj").is_dir()  # no_zip 出 folder；包名默认 = 插件目录名
+    assert (root / "output" / "proj.zip").is_file()  # 发布固定 zip
 
 
 def test_build_no_project_readonly(tmp_path, capsys):
@@ -102,7 +101,7 @@ def test_build_no_project_readonly(tmp_path, capsys):
             "compile_system": "",
         "entry": "main.py",
         "builder": {"files": [{"path": "main.py", "tags": ["entry"]}],
-                    "no_zip": True, "output_dir": ""},
+                    "output_dir": ""},
     }
     _write_project(root, project, {"main.py": "x"})
     before = (root / ".dghub-sdk" / "project.json").read_bytes()

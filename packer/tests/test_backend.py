@@ -21,8 +21,7 @@ def test_defaults_fill(make_project):
     project = pm.read_project()
     assert project["compile_system"] == ""
     assert project["include_sdk"] is True
-    assert project["builder"] == {"files": [], "no_zip": False,
-                                  "output_dir": ""}
+    assert project["builder"] == {"files": [], "output_dir": ""}
 
 
 def test_unknown_keys_preserved(make_project):
@@ -248,7 +247,7 @@ def test_run_build_no_compile(make_project, make_ctx):
     ctx, _ = make_ctx(pm, b, plugin_dir )
     artifact = run_build(ctx, {"id": "t", "name": "t"})
     assert artifact is not None
-    # folder 模式（no_zip=False 默认）→ zip；包名默认 = 插件目录名
+    # 发布固定 zip；包名默认 = 插件目录名
     assert artifact.name == "testplugin.zip"
     import zipfile
     with zipfile.ZipFile(artifact) as zf:
@@ -260,7 +259,8 @@ def test_run_build_no_compile(make_project, make_ctx):
         assert manifest["entry"] == "main.py"
 
 
-def test_run_build_no_zip_folder(make_project, make_ctx):
+def test_run_build_folder_override(make_project, make_ctx):
+    """调试 folder 覆盖（内存，不落盘）：set_no_zip(True) → 目录产物。"""
     pm, b, plugin_dir = make_project()
     (plugin_dir / "main.exe").write_text("exe")
     b.add_file("main.exe", ["entry"])

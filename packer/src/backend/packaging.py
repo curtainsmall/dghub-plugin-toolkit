@@ -53,7 +53,7 @@ def package_plugin(ctx: Any, manifest_data: dict[str, Any],
     """按 no_zip 组装产物并清理中间目录，返回产物路径。
 
     - ``no_zip=False``（默认）→ ``<name>.zip``（分发）
-    - ``no_zip=True`` → ``<name>/`` 目录（调试，就地可用）
+    - ``no_zip=True`` → ``<name>/`` 目录（仅调试构建使用）
     - ``keep_cache=True``（调试构建）→ 保留 .deps / cache 供下次增量
     - 包名：显式包名（构建页「包名」）> manifest.id > 插件目录名
 
