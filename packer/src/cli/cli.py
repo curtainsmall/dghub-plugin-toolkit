@@ -69,24 +69,24 @@ def _make_ctx(pm: ProjectManager, plugin_dir: str, logger: Logger,
               pypi_index: str) -> BuildContext:
     """从 project.json 组装 BuildContext（只读）。"""
     project = pm.read_project()
-    compile_system = project.get("compile_system", "")
+    compile_system = project.get("compiler", {}).get("compile_system", "")
     out_cfg = project.get("builder", {})
     output_dir = (pm.to_absolute(out_cfg.get("output_dir", ""))
                   or str(Path(plugin_dir) / "output"))
     match compile_system:
         case "python":
             compile_cfg = {
-                "manifest": project.get("manifest", ""),
-                "include_sdk": bool(project.get("include_sdk", True)),
+                "manifest": project.get("compiler", {}).get("manifest", ""),
+                "include_sdk": bool(project.get("compiler", {}).get("include_sdk", True)),
             }
         case "node":
             compile_cfg = {
-                "manifest": project.get("manifest", ""),
+                "manifest": project.get("compiler", {}).get("manifest", ""),
             }
         case "command":
             compile_cfg = {
-                "compile": project.get("compile", ""),
-                "compile_dir": project.get("compile_dir", ""),
+                "compile": project.get("compiler", {}).get("compile", ""),
+                "compile_dir": project.get("compiler", {}).get("compile_dir", ""),
             }
         case _:
             compile_cfg = {}

@@ -1,13 +1,15 @@
 """.dghub-sdk/ project configuration management.
 
-project.json 为唯一配置文件（顶层平铺 + builder 节）::
+project.json 为唯一配置文件（compiler 节 + builder 节）::
 
     {
-      "compile_system": "python",      # 编译选择：""（无）/ "python" / "command"
-      "compile": "",            # CommandCompiler 设置（compile_system="command" 时必填）
-      "compile_dir": "",             # CommandCompiler 执行目录（空 = 项目根）
-      "manifest": "",             # PythonCompiler 设置（compile_system="python" 时必填）
-      "include_sdk": true,        # PythonCompiler 选项：是否打包 dghub-sdk
+      "compiler": {
+        "compile_system": "python",  # 编译选择：""（无）/ "python" / "command"
+        "compile": "",        # CommandCompiler 设置（compile_system="command" 时必填）
+        "compile_dir": "",    # CommandCompiler 执行目录（空 = 项目根）
+        "manifest": "",       # PythonCompiler 设置（compile_system="python" 时必填）
+        "include_sdk": true   # PythonCompiler 选项：是否打包 dghub-sdk
+      },
       "builder": {
         "files": [],              # 统一文件选择列表：[{"path"|"dir"|"pattern", "tags"}]
         "output_dir": ""          # 输出目录（空 = 插件目录/output）
@@ -36,13 +38,18 @@ _MANIFEST_DEFAULTS: dict[str, Any] = {
     "sdk": "1",
 }
 
-# 顶层默认值（compile_system 显式单选："" 无 / "python" / "command"）
-_PROJECT_DEFAULTS: dict[str, Any] = {
+# compiler 节默认值（compile_system 显式单选："" 无 / "python" / "command"）
+_COMPILER_DEFAULTS: dict[str, Any] = {
     "compile_system": "",
     "compile": "",
     "compile_dir": "",
     "manifest": "",
     "include_sdk": True,
+}
+
+# 顶层默认值（compiler 节为唯一编译配置来源）
+_PROJECT_DEFAULTS: dict[str, Any] = {
+    "compiler": dict(_COMPILER_DEFAULTS),
 }
 
 # builder 节默认值（files = 统一文件选择列表，条目 {path|dir|pattern, tags}）
@@ -128,7 +135,7 @@ class ProjectManager:
         )
 
     # ------------------------------------------------------------------
-    # Project config（顶层平铺 + builder 节）
+    # Project config（compiler 节 + builder 节）
     # ------------------------------------------------------------------
 
     def _load_json(self, name: str) -> Any:
@@ -142,22 +149,15 @@ class ProjectManager:
         return None
 
     def read_project(self) -> dict[str, Any]:
-        """读取并归一化 project.json（顶层平铺 + builder 节）。"""
+        """读取并归一化 project.json（compiler 节 + builder 节）。
+
+        旧结构转换已移除——project.json 只接受当前结构；旧顶层编译键
+        作为未知键原样保留（不再搬移落盘）。
+        """
         raw = self._load_json("project.json")
         if not isinstance(raw, dict):
             return self._fill_defaults({})
-        data = self._fill_defaults(raw)
-        # 已废弃键 no_zip 清除（发布形态固定 zip；folder 仅调试内存覆盖）
-        data.get("builder", {}).pop("no_zip", None)
-        # 早期键 producer → compile_system（温和搬移，落盘一次）
-        if not data.get("compile_system") and data.get("producer"):
-            data["compile_system"] = data["producer"]
-            data.pop("producer", None)
-            try:
-                self.write_project(data)
-            except OSError:
-                pass
-        return data
+        return self._fill_defaults(raw)
 
     def write_project(self, data: dict[str, Any]) -> None:
         """Write project settings to `.dghub-sdk/project.json`."""
@@ -172,7 +172,11 @@ class ProjectManager:
         """补全顶层与 builder 节默认键；未知键原样保留。"""
         data = dict(raw)
         for k, v in _PROJECT_DEFAULTS.items():
-            data.setdefault(k, v)
+            data.setdefault(k, dict(v) if isinstance(v, dict) else v)
+        compiler = dict(data.get("compiler", {}))
+        for k, v in _COMPILER_DEFAULTS.items():
+            compiler.setdefault(k, v)
+        data["compiler"] = compiler
         builder = dict(data.get("builder", {}))
         for k, v in _BUILDER_DEFAULTS.items():
             builder.setdefault(k, v)

@@ -19,8 +19,8 @@ from backend.compilers import COMPILERS, get_compiler
 def test_defaults_fill(make_project):
     pm, _, _ = make_project()
     project = pm.read_project()
-    assert project["compile_system"] == ""
-    assert project["include_sdk"] is True
+    assert project["compiler"]["compile_system"] == ""
+    assert project["compiler"]["include_sdk"] is True
     assert project["builder"] == {"files": [], "output_dir": ""}
 
 
@@ -30,26 +30,6 @@ def test_unknown_keys_preserved(make_project):
     project["future_key"] = {"x": 1}
     pm.write_project(project)
     assert pm.read_project()["future_key"] == {"x": 1}
-
-
-def test_v2_producer_key_migrated(make_project):
-    """v2 早期键 producer → compile_system 温和搬移（落盘一次）。"""
-    pm, _, _ = make_project()
-    project = pm.read_project()
-    project["producer"] = "python"
-    project.pop("compile_system", None)
-    pm.write_project(project)
-    # 重新读取：producer 搬移到 compile_system
-    data = pm.read_project()
-    assert data["compile_system"] == "python"
-    assert "producer" not in data
-    # 已搬移后不再重复
-    assert pm.read_project()["compile_system"] == "python"
-
-
-# ---------------------------------------------------------------------------
-# Builder：统一文件列表 + 标签 + resolve
-# ---------------------------------------------------------------------------
 
 
 def test_builder_items_and_tags(make_project):

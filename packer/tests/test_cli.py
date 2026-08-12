@@ -54,7 +54,7 @@ def test_build_missing_entry(tmp_path, capsys):
     """缺 entry 条目 → 校验失败退出码 3。"""
     root = tmp_path / "proj"
     _write_project(root, {
-            "compile_system": "",
+            "compiler": {"compile_system": ""},
         "entry": "main.py",
         "builder": {"files": [], "output_dir": ""},
     }, {"main.py": "print('hi')\n"})
@@ -98,7 +98,7 @@ def test_build_no_project_readonly(tmp_path, capsys):
     """CLI 不修改项目配置：构建后 project.json 原样。"""
     root = tmp_path / "proj"
     project = {
-            "compile_system": "",
+        "compiler": {"compile_system": ""},
         "entry": "main.py",
         "builder": {"files": [{"path": "main.py", "tags": ["entry"]}],
                     "output_dir": ""},

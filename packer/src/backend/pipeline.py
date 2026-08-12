@@ -74,9 +74,11 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
             and not ctx.compile_cfg.get("compile"):
         suggest = comp.probe(ctx.plugin_dir)
         if suggest:
+            section = dict(ctx.pm.get_field("compiler") or {})
             for key, value in suggest.items():
-                ctx.pm.set_field(key, value)
+                section[key] = value
                 applied.append(f"{key} = {value}")
+            ctx.pm.set_field("compiler", section)
 
     # 2) deduce：建议编译产物条目（只填空——已存在 entry 条目不重复添加）
     items = ctx.builder.items()
