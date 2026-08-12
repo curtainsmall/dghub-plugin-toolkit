@@ -46,7 +46,7 @@ class App(ctk.CTk):
 
         self.title(self.TITLE)
         self.geometry(self.WINDOW_SIZE)
-        self.minsize(900, 600)
+        self.minsize(1400, 1000)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
