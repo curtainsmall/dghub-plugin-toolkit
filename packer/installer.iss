@@ -48,7 +48,7 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyGuiExe}"; Tasks: desktopicon
 
 [Run]
-; 安装完成后自动启动 Packer（更新场景 = 自动重启新版本）；静默安装跳过
+; 「启动 Packer」复选框（默认勾选——安装完成即启动）；静默安装跳过
 Filename: "{app}\{#MyGuiExe}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
