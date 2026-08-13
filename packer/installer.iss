@@ -47,6 +47,10 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyGuiExe}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyGuiExe}"; Tasks: desktopicon
 
+[Run]
+; 安装完成后自动启动 Packer（更新场景 = 自动重启新版本）；静默安装跳过
+Filename: "{app}\{#MyGuiExe}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+
 [Registry]
 ; 将安装目录加入用户 PATH（使 dgpacker-cli 全局可用）；ChangesEnvironment=yes 会广播 WM_SETTINGCHANGE
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \
