@@ -57,7 +57,7 @@ dgpacker-cli --version
 | `compile_system` | `""` / `"python"` / `"node"` / `"command"` | 编译选择 |
 | `compile` | string | CommandCompiler 命令（`"command"` 时必填） |
 | `compile_dir` | string | CommandCompiler 执行目录（空 = 项目根） |
-| `manifest` | string | Python/Node 编译的依赖清单（`"python"`/`"node"` 时必填） |
+| `manifest` | string | Python/Node.js 编译的依赖清单（`"python"`/`"node"` 时必填） |
 
 **builder 节**（打包配置）：
 
@@ -72,7 +72,7 @@ dgpacker-cli --version
 （自动声明，勿手工维护）。
 
 编译入口不在 project.json：Python 由 `pyproject.toml` 的 `[tool.dghub].entry`
-声明，Node 由 `package.json` 的 `main` 字段声明，CLI 构建时直接读取。
+声明，Node.js 由 `package.json` 的 `main` 字段声明，CLI 构建时直接读取。
 
 ## CI 示例
 
