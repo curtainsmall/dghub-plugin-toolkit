@@ -7,6 +7,14 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（版本跳号为预期行为）。
 
+## [0.11.0] - 2026-08-13
+
+### 变更
+
+- **Packer**：移除「包含 dghub-sdk」选项——Python 与 Node.js 的所有依赖
+  必须在清单中声明
+- **Packer**：TypeScript 编译的「Node」统一为「Node.js」命名
+
 ## [0.10.0] - 2026-08-13
 
 ### 新增
