@@ -40,7 +40,6 @@ class CompileTab(ctk.CTkFrame):
         # 状态变量
         self._compile_system_var = ctk.StringVar(value="")
         self._manifest_var = ctk.StringVar(value="")
-        self._include_sdk_var = ctk.BooleanVar(value=True)
         self._compile_var = ctk.StringVar(value="")   # 编译命令字符串
         self._compile_dir = ""  # 执行目录（绝对路径；空 = 项目根）
 
@@ -114,12 +113,6 @@ class CompileTab(ctk.CTkFrame):
         self._manifest_btn.grid(row=0, column=2, padx=(5, 0))
         self._controls.extend([self._manifest_label, self._manifest_btn])
 
-        self._include_sdk_cb = ctk.CTkCheckBox(
-            self._py_frame, text="包含 dghub-sdk",
-            variable=self._include_sdk_var,
-            command=self._on_setting_changed)
-        self._include_sdk_cb.grid(row=1, column=1, sticky="w", padx=5, pady=4)
-        self._controls.append(self._include_sdk_cb)
 
         self._pyinstaller_hint = ctk.CTkLabel(
             self._py_frame, text="", font=ctk.CTkFont(size=12),
@@ -225,10 +218,8 @@ class CompileTab(ctk.CTkFrame):
         if cid in ("python", "node"):
             # Node 与 Python 共用依赖清单区；Node 隐藏 SDK 与预检行
             if cid == "node":
-                self._include_sdk_cb.grid_remove()
                 self._pyinstaller_hint.grid_remove()
             else:
-                self._include_sdk_cb.grid()
                 self._pyinstaller_hint.grid()
             self._py_frame.grid()
         elif cid == "command":
@@ -349,8 +340,6 @@ class CompileTab(ctk.CTkFrame):
                              COMPILER_CHOICES[0][1])
                 self._proc_menu.set(label)
                 self._manifest_var.set(project.get("compiler", {}).get("manifest", ""))
-                self._include_sdk_var.set(
-                    bool(project.get("compiler", {}).get("include_sdk", True)))
                 self._compile_var.set(project.get("compiler", {}).get("command", ""))
                 rel_exec = project.get("compiler", {}).get("compile_dir", "")
                 self._compile_dir = (self._pm.to_absolute(rel_exec)
@@ -373,7 +362,6 @@ class CompileTab(ctk.CTkFrame):
         compiler = project["compiler"]
         compiler["compile_system"] = self._compile_id()
         compiler["manifest"] = self._manifest_var.get()
-        compiler["include_sdk"] = self._include_sdk_var.get()
         compiler["command"] = self._compile_var.get()
         compiler["compile_dir"] = (self._pm.to_relative(self._compile_dir)
                                  if self._compile_dir else "")
@@ -386,8 +374,7 @@ class CompileTab(ctk.CTkFrame):
         """供 BuildContext 组装的编译设置字段。"""
         cid = self._compile_id()
         if cid == "python":
-            return {"manifest": self._manifest_var.get(),
-                    "include_sdk": self._include_sdk_var.get()}
+            return {"manifest": self._manifest_var.get()}
         if cid == "node":
             return {"manifest": self._manifest_var.get()}
         if cid == "command":

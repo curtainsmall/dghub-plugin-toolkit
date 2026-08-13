@@ -290,9 +290,7 @@ class DebugTab(ctk.CTkFrame):
         project = self._pm.read_project() if self._pm else {}
         compile_system = project.get("compiler", {}).get("compile_system", "")
         if compile_system == "python":
-            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", ""),
-                           "include_sdk": bool(
-                               project.get("compiler", {}).get("include_sdk", True))}
+            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
         elif compile_system == "node":
             compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
         elif compile_system == "command":

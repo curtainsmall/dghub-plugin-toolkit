@@ -204,8 +204,6 @@ class PythonCompiler(Compiler):
     fields = {
         "manifest": {"label": "依赖清单", "type": "str",
                      "default": "", "required": True},
-        "include_sdk": {"label": "包含 dghub-sdk", "type": "bool",
-                        "default": True, "required": False},
     }
 
     def enabled(self, cfg: dict[str, Any]) -> bool:
@@ -217,13 +215,12 @@ class PythonCompiler(Compiler):
         return filename.lower() == "pyproject.toml"
 
     def probe(self, plugin_dir: Path) -> dict[str, Any] | None:
-        """探测 pyproject.toml → 建议 manifest / include_sdk。"""
+        """探测 pyproject.toml → 建议 manifest。"""
         pyproject = plugin_dir / "pyproject.toml"
         if not pyproject.is_file():
             return None
         return {
             "manifest": "pyproject.toml",
-            "include_sdk": True,
         }
 
     def check_available(self) -> tuple[bool, str]:
@@ -326,7 +323,6 @@ class PythonCompiler(Compiler):
         ok = build_plugin_exe(
             plugin_dir=str(ctx.plugin_dir),
             source_dir=str(ctx.source_dir),
-            include_dghub_sdk=bool(ctx.cfg.get("include_sdk", True)),
             logger=ctx.log,
             output_dir=str(ctx.output_dir),
             entry=entry,
@@ -408,12 +404,12 @@ class NodeCompiler(Compiler):
     """npm 按 package.json 安装依赖 → tsc 编译（可选）→ SEA 打包。
 
     产物约定（onedir，同 PyInstaller 模式）：``out_dir/.node/<name>/`` 下
-    的 SEA exe（含 Node 运行时 + 引导器）+ ``node_modules/`` + 入口目录。
+    的 SEA exe（含 Node.js 运行时 + 引导器）+ ``node_modules/`` + 入口目录。
     入口 = package.json ``main``（生态标准，缺省 index.js）。
     """
 
     id = "node"
-    label = "Node (npm + SEA)"
+    label = "Node.js (npm + SEA)"
     description = ("按 package.json 安装依赖并打包为自包含 exe"
                    "（npm + tsc 可选 + SEA 单文件运行时）")
     fields = {
@@ -450,12 +446,12 @@ class NodeCompiler(Compiler):
         manifest = cfg.get("manifest", "")
         if manifest and not self.is_known_manifest(Path(manifest).name):
             errors.append(f"无法识别的依赖清单: {Path(manifest).name}"
-                          "（Node 编译仅支持 package.json）")
+                          "（Node.js 编译仅支持 package.json）")
         entry = read_package_json_main(Path(source_dir) / manifest) \
             if manifest else ""
         if not entry:
             errors.append("package.json 缺少 main 入口字段"
-                          "（Node 编译入口，缺省 index.js）")
+                          "（Node.js 编译入口，缺省 index.js）")
         elif not (source_dir / entry).is_file():
             # TS 项目入口为 tsc 产物：构建前不存在，由编译生成（resolve 兜底）
             if not (source_dir / "tsconfig.json").is_file():
@@ -507,7 +503,7 @@ class NodeCompiler(Compiler):
         entry = read_package_json_main(manifest_path)
         if not entry:
             ctx.log.error("package.json 缺少 main 入口字段"
-                          "（Node 编译入口，缺省 index.js）")
+                          "（Node.js 编译入口，缺省 index.js）")
             return False
 
         # 1) npm 安装依赖（产物所需 node_modules 生成于插件目录）
@@ -645,7 +641,7 @@ COMPILERS: dict[str, Compiler] = {
 COMPILER_CHOICES: tuple[tuple[str, str], ...] = (
     ("", "无"),
     ("python", "Python (uv + PyInstaller)"),
-    ("node", "Node (npm + SEA)"),
+    ("node", "Node.js (npm + SEA)"),
     ("command", "自定义命令"),
 )
 

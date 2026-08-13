@@ -42,15 +42,6 @@ def _get_python_exe() -> list[str]:
 # helpers
 # ---------------------------------------------------------------------------
 
-def _find_sdk_path() -> str:
-    """Return the parent directory that contains dghub_sdk package."""
-    if getattr(sys, "frozen", False):
-        # dghub_sdk bundled via --add-data → _MEIPASS/dghub_sdk/
-        return str(Path(sys._MEIPASS))  # pyright: ignore[reportAny]
-    else:
-        this = Path(__file__).resolve().parent
-        return str(this.parent.parent / "sdk" / "python")
-
 
 def _read_entry(plugin_dir: Path) -> str:
     """Read manifest.json, return entry filename (default 'main.py')."""
@@ -100,7 +91,6 @@ def _check_pyinstaller(py_exe: list[str], logger: Logger) -> bool:
 
 def build_plugin_exe(
     plugin_dir: str,
-    include_dghub_sdk: bool = True,
     logger: Logger | None = None,
     output_dir: str = "",
     source_dir: str = "",
@@ -113,7 +103,6 @@ def build_plugin_exe(
     Args:
         plugin_dir: Absolute path to plugin root (where .dghub-sdk lives).
         source_dir: Absolute path to source code root (defaults to plugin_dir).
-        include_dghub_sdk: Whether to bundle dghub_sdk.
         logger: 可选日志器；缺省时静默。
         output_dir: Output directory for the onedir product.
         entry: 入口文件（相对 source_dir）；缺省时回退读插件根 manifest.json。
@@ -164,15 +153,6 @@ def build_plugin_exe(
         "--specpath", str(cache_dir),
     ]
 
-    # SDK path
-    if include_dghub_sdk:
-        sdk_path = _find_sdk_path()
-        cmd += ["--paths", sdk_path]
-        cmd += ["--hidden-import", "dghub_sdk"]
-        cmd += ["--hidden-import", "dghub_sdk.agent"]
-        cmd += ["--hidden-import", "dghub_sdk.codec"]
-        cmd += ["--hidden-import", "dghub_sdk.enums"]
-        log.detail(f"dghub_sdk 路径: {sdk_path}")
 
     # 依赖目录（清单下载产物 .deps，存在才加）
     if dep_dir and Path(dep_dir).is_dir() and any(Path(dep_dir).iterdir()):

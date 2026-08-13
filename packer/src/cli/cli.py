@@ -77,7 +77,6 @@ def _make_ctx(pm: ProjectManager, plugin_dir: str, logger: Logger,
         case "python":
             compile_cfg = {
                 "manifest": project.get("compiler", {}).get("manifest", ""),
-                "include_sdk": bool(project.get("compiler", {}).get("include_sdk", True)),
             }
         case "node":
             compile_cfg = {
