@@ -36,8 +36,7 @@ dgpacker-cli --version
     "compile_system": "python",
     "compile": "",
     "compile_dir": "",
-    "manifest": "pyproject.toml",
-    "include_sdk": true
+    "manifest": "pyproject.toml"
   },
   "builder": {
     "files": [
@@ -59,7 +58,6 @@ dgpacker-cli --version
 | `compile` | string | CommandCompiler 命令（`"command"` 时必填） |
 | `compile_dir` | string | CommandCompiler 执行目录（空 = 项目根） |
 | `manifest` | string | Python/Node 编译的依赖清单（`"python"`/`"node"` 时必填） |
-| `include_sdk` | bool | Python 编译是否打包 dghub-sdk |
 
 **builder 节**（打包配置）：
 

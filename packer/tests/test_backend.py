@@ -20,7 +20,6 @@ def test_defaults_fill(make_project):
     pm, _, _ = make_project()
     project = pm.read_project()
     assert project["compiler"]["compile_system"] == ""
-    assert project["compiler"]["include_sdk"] is True
     assert project["builder"] == {"files": [], "output_dir": ""}
 
 
@@ -115,8 +114,7 @@ def test_python_compiler_probe(tmp_path):
     (root / "pyproject.toml").write_text(
         "[tool.dghub]\nentry='src/main.py'\n")
     py = get_compiler("python")
-    assert py.probe(root) == {"manifest": "pyproject.toml",
-                              "include_sdk": True}
+    assert py.probe(root) == {"manifest": "pyproject.toml"}
     # 无 pyproject → None
     assert py.probe(tmp_path / "empty") is None
 
@@ -149,7 +147,7 @@ def test_python_compiler_validate(make_project):
     # 不可识别清单 → 错误
     assert py.validate({"manifest": "package.json"}, plugin_dir)
     # pyproject 缺 [tool.dghub].entry → 错误
-    cfg = {"manifest": "pyproject.toml", "include_sdk": True}
+    cfg = {"manifest": "pyproject.toml"}
     assert any("[tool.dghub].entry" in e
                for e in py.validate(cfg, plugin_dir))
     # 非 .py 入口 → 错误
@@ -180,7 +178,7 @@ def test_compiler_registry():
 def test_validate_required(make_project, make_ctx):
     pm, b, plugin_dir = make_project()
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
-                      compile_cfg={"manifest": "", "include_sdk": True})
+                      compile_cfg={"manifest": ""})
     errors = validate(ctx)
     # 编译必要字段（manifest 缺失）+ Builder 必要条目（entry 缺失）
     assert any("依赖清单" in e for e in errors)
@@ -195,8 +193,7 @@ def test_fill_builder_only_fills_empty(make_project, make_ctx):
     pm.set_field("compile_system", "python")
     pm.set_field("manifest", "pyproject.toml")
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
-                      compile_cfg={"manifest": "pyproject.toml",
-                                   "include_sdk": True})
+                      compile_cfg={"manifest": "pyproject.toml"})
     applied = fill_builder(ctx)
     assert applied and any("入口" in a for a in applied)
     assert b.entry_errors(plugin_dir) == []

@@ -204,8 +204,6 @@ class PythonCompiler(Compiler):
     fields = {
         "manifest": {"label": "依赖清单", "type": "str",
                      "default": "", "required": True},
-        "include_sdk": {"label": "包含 dghub-sdk", "type": "bool",
-                        "default": True, "required": False},
     }
 
     def enabled(self, cfg: dict[str, Any]) -> bool:
@@ -217,13 +215,12 @@ class PythonCompiler(Compiler):
         return filename.lower() == "pyproject.toml"
 
     def probe(self, plugin_dir: Path) -> dict[str, Any] | None:
-        """探测 pyproject.toml → 建议 manifest / include_sdk。"""
+        """探测 pyproject.toml → 建议 manifest。"""
         pyproject = plugin_dir / "pyproject.toml"
         if not pyproject.is_file():
             return None
         return {
             "manifest": "pyproject.toml",
-            "include_sdk": True,
         }
 
     def check_available(self) -> tuple[bool, str]:
@@ -326,7 +323,6 @@ class PythonCompiler(Compiler):
         ok = build_plugin_exe(
             plugin_dir=str(ctx.plugin_dir),
             source_dir=str(ctx.source_dir),
-            include_dghub_sdk=bool(ctx.cfg.get("include_sdk", True)),
             logger=ctx.log,
             output_dir=str(ctx.output_dir),
             entry=entry,
