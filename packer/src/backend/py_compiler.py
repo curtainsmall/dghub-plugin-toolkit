@@ -6,6 +6,7 @@ system Python for the actual PyInstaller invocation.
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -57,16 +58,18 @@ def _read_entry(plugin_dir: Path) -> str:
     return "main.py"
 
 
-def _scan_toplevel_packages(dep_dir: Path | None) -> list[str]:
-    """列出依赖目录中的顶层包名（含 __init__.py 的目录，排除元数据目录）。
+def _scan_toplevel_packages(dep_dir: Path | None) -> tuple[list[str], list[str]]:
+    """列出依赖目录中的顶层包，返回 (常规包, 命名空间包)。
 
     仅列目录结构，不解析任何依赖声明；结果供 PyInstaller
-    ``--collect-data`` / ``--copy-metadata`` 收集包内数据文件与元数据
-    （litellm 等带数据文件的依赖包，PyInstaller 默认只收集 .py 代码）。
+    ``--collect-data`` / ``--copy-metadata`` / ``--add-data`` 收集包内
+    数据文件、元数据与源码（litellm 等带数据文件的依赖包，PyInstaller
+    默认只收集 .py 代码；tiktoken_ext 等命名空间插件包需整体复制源码）。
     """
     if not dep_dir or not dep_dir.is_dir():
-        return []
+        return [], []
     packages: list[str] = []
+    ns_packages: list[str] = []
     for d in dep_dir.iterdir():
         if not d.is_dir() or d.name.startswith("."):
             continue
@@ -74,7 +77,34 @@ def _scan_toplevel_packages(dep_dir: Path | None) -> list[str]:
             continue
         if (d / "__init__.py").is_file():
             packages.append(d.name)
-    return sorted(packages)
+        elif any(d.glob("*.py")):
+            # 命名空间包（无 __init__.py）：插件发现依赖文件系统遍历，
+            # 需整体复制源码（含 .py）而非仅数据文件
+            ns_packages.append(d.name)
+    return sorted(packages), sorted(ns_packages)
+
+
+_IMPORT_RE = re.compile(r"^(?:from|import)\s+([a-zA-Z_]\w*(?:\.\w+)*)",
+                        re.MULTILINE)
+
+
+def _scan_ns_hidden_imports(dep_dir: Path, ns_pkg: str,
+                            top_packages: set[str]) -> list[str]:
+    """扫描命名空间包 .py 的 import 语句，返回需隐藏导入的模块路径。
+
+    命名空间插件包（tiktoken_ext 等）以源码文件形式进产物，其 import 的
+    宿主包子模块（tiktoken.load 等）不在入口 import 图中——须显式收集。
+    """
+    hidden: list[str] = []
+    for py in (dep_dir / ns_pkg).glob("*.py"):
+        src = py.read_text(encoding="utf-8", errors="ignore")
+        for m in _IMPORT_RE.finditer(src):
+            mod = m.group(1)
+            # 仅子模块路径需显式收集（顶层模块由常规收集机制处理）
+            if ("." in mod and mod.split(".", 1)[0] in top_packages
+                    and mod not in hidden):
+                hidden.append(mod)
+    return hidden
 
 
 def _check_pyinstaller(py_exe: list[str], logger: Logger) -> bool:
@@ -182,13 +212,23 @@ def build_plugin_exe(
 
     # 依赖数据文件与元数据：.deps 所有顶层包逐一收集（litellm 等带数据
     # 文件的包；PyInstaller 默认只收 .py，数据文件须显式声明）
-    dep_pkgs = _scan_toplevel_packages(deps_dir)
+    dep_pkgs, ns_pkgs = _scan_toplevel_packages(deps_dir)
     for pkg in dep_pkgs:
         cmd += ["--collect-data", pkg]
         if any(deps_dir.glob(f"{pkg}-*.dist-info")):
             cmd += ["--copy-metadata", pkg]
     if dep_pkgs:
         log.detail(f"依赖数据收集: {', '.join(dep_pkgs)}")
+
+    # 命名空间包（tiktoken_ext 等插件包）：整体复制源码目录——插件发现
+    # 机制依赖文件系统遍历（pkgutil.iter_modules），归档内的模块不可见
+    top_packages = set(dep_pkgs + ns_pkgs)
+    for pkg in ns_pkgs:
+        cmd += ["--add-data", f"{deps_dir / pkg};{pkg}"]
+        for mod in _scan_ns_hidden_imports(deps_dir, pkg, top_packages):
+            cmd += ["--hidden-import", mod]
+    if ns_pkgs:
+        log.detail(f"命名空间包复制: {', '.join(ns_pkgs)}")
 
     # PyInstaller 子进程环境：.deps 注入 PYTHONPATH——spec 执行时
     # collect_data_files / copy_metadata 需经 sys.path 定位依赖包

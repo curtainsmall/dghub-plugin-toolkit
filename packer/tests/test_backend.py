@@ -9,7 +9,8 @@ from backend.builder import BuildError, evaluate_pattern
 from backend.packaging import package_plugin, cleanup_intermediates
 from backend.pipeline import fill_builder, run_build, validate
 from backend.compilers import COMPILERS, get_compiler
-from backend.py_compiler import _scan_toplevel_packages
+from backend.py_compiler import (_scan_ns_hidden_imports,
+                                  _scan_toplevel_packages)
 
 
 # ---------------------------------------------------------------------------
@@ -320,19 +321,40 @@ def test_packaging_cleanup(make_project):
 
 
 def test_scan_toplevel_packages(tmp_path):
-    """只收含 __init__.py 的包目录；跳过元数据/隐藏/散文件。"""
+    """常规包按 __init__.py 判定；命名空间包按 .py 文件判定；跳过元数据等。"""
     deps = tmp_path / "deps"
     for name in ("aiohttp", "litellm"):
         pkg_dir = deps / name
         pkg_dir.mkdir(parents=True)
         (pkg_dir / "__init__.py").touch()
-    (deps / "aiohttp-3.14.3.dist-info").mkdir()     # 元数据跳过
-    (deps / "ns_pkg").mkdir()                        # 命名空间包（无 __init__）跳过
-    (deps / ".hidden").mkdir()                       # 隐藏目录跳过
-    (deps / "single.py").write_text("x = 1")         # 散文件跳过
-    assert _scan_toplevel_packages(deps) == ["aiohttp", "litellm"]
+    (deps / "tiktoken_ext").mkdir()                    # 命名空间包（无 __init__）
+    (deps / "tiktoken_ext" / "openai_public.py").touch()
+    (deps / "aiohttp-3.14.3.dist-info").mkdir()        # 元数据跳过
+    (deps / "empty_dir").mkdir()                       # 无 .py 的目录跳过
+    (deps / ".hidden").mkdir()                         # 隐藏目录跳过
+    (deps / "single.py").write_text("x = 1")           # 散文件跳过
+    packages, ns_packages = _scan_toplevel_packages(deps)
+    assert packages == ["aiohttp", "litellm"]
+    assert ns_packages == ["tiktoken_ext"]
 
 
 def test_scan_toplevel_packages_missing(tmp_path):
     """目录不存在返回空列表。"""
-    assert _scan_toplevel_packages(tmp_path / "none") == []
+    assert _scan_toplevel_packages(tmp_path / "none") == ([], [])
+
+
+def test_scan_ns_hidden_imports(tmp_path):
+    """命名空间包 .py 的 import 语句提取宿主包子模块；相对导入跳过。"""
+    deps = tmp_path / "deps"
+    ns = deps / "tiktoken_ext"
+    ns.mkdir(parents=True)
+    (ns / "openai_public.py").write_text(
+        "from tiktoken.load import load_tiktoken_bpe\n"
+        "import tiktoken.core\n"
+        "from .local import x\n"
+        "import requests\n")
+    hidden = _scan_ns_hidden_imports(
+        deps, "tiktoken_ext", {"tiktoken", "requests"})
+    assert hidden == ["tiktoken.load", "tiktoken.core"]
+    # 非 .deps 顶层包的模块不收集（requests 属于 .deps 但未在文件内导入）
+    assert "requests" not in hidden
