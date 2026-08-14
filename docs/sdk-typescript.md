@@ -14,6 +14,7 @@
 - [错误处理](#错误处理)
 - [手动接入（调试）](#手动接入调试)
 - [构建与测试](#构建与测试)
+- [附录：插件入口声明](#附录插件入口声明)
 
 ---
 
@@ -23,7 +24,7 @@
 npm install dghub-sdk
 ```
 
-依赖：Node.js 20+（SEA 打包要求）、`ws`（自动安装）。
+依赖：Node.js 24+（TypeScript 原生执行与 SEA 打包要求）、`ws`（自动安装）。
 
 ## 快速开始
 
@@ -56,8 +57,7 @@ while (running) {
 
 ## 插件根目录与资源文件
 
-`pluginRoot()` 返回插件根目录（exe 形态 = exe 所在目录；源码形态 =
-调用文件所在目录；`DGHUB_PLUGIN_ROOT` 环境变量优先，约定绝对路径）：
+`pluginRoot()` 返回插件根目录（`DGHUB_PLUGIN_ROOT` 环境变量优先）：
 
 ```ts
 import { pluginRoot } from "dghub-sdk";
@@ -190,6 +190,14 @@ cd sdk/typescript
 npm install
 npm run build     # tsc 编译到 dist/
 npm test          # node:test 单元测试
+```
+
+## 附录：插件入口声明
+
+TypeScript 插件入口由 `package.json` 的 `main` 字段声明。该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时不需要：
+
+```json
+{ "main": "dist/main.js" }
 ```
 
 ---

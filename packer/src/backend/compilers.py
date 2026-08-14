@@ -306,7 +306,7 @@ class PythonCompiler(Compiler):
         ok = run_logged(
             ["uv", "pip", "install", "--target", str(deps_dir),
              "-r", str(manifest_path)],
-            ctx.log, "uv", cwd=str(ctx.source_dir),
+            ctx.log, "uv", cwd=ctx.source_dir,
             env=env, canceller=ctx.canceller)
         if not ok:
             ctx.log.error("依赖打包失败")
@@ -352,7 +352,7 @@ def read_tool_dghub_entry(manifest: Path) -> str:
         return ""
     try:
         import tomllib
-        with open(manifest, "rb") as f:
+        with manifest.open("rb") as f:
             data = tomllib.load(f)
         entry = data.get("tool", {}).get("dghub", {}).get("entry", "")
         return entry if isinstance(entry, str) else ""
@@ -510,7 +510,7 @@ class NodeCompiler(Compiler):
         ctx.log.info(f"依赖来源: {manifest}，npm install ...")
         lock_existed = (ctx.source_dir / "package-lock.json").exists()
         ok = run_logged([*_node_tool("npm"), "install", "--no-audit", "--no-fund"],
-                        ctx.log, "npm", cwd=str(ctx.source_dir),
+                        ctx.log, "npm", cwd=ctx.source_dir,
                         canceller=ctx.canceller)
         if not ok:
             ctx.log.error("依赖安装失败")
@@ -537,7 +537,7 @@ class NodeCompiler(Compiler):
                     build_cmd = [*_node_tool("npx"), "tsc"]
             ctx.log.info(f"编译 TS: {' '.join(build_cmd)}")
             ok = run_logged(build_cmd, ctx.log, "tsc",
-                            cwd=str(ctx.source_dir),
+                            cwd=ctx.source_dir,
                             canceller=ctx.canceller)
             if not ok:
                 ctx.log.error("TS 编译失败")
@@ -562,7 +562,7 @@ class NodeCompiler(Compiler):
         try:
             ok = run_logged(
                 ["node", "--experimental-sea-config", "sea-config.json"],
-                ctx.log, "SEA", cwd=str(ctx.source_dir),
+                ctx.log, "SEA", cwd=ctx.source_dir,
                 canceller=ctx.canceller)
             if not ok:
                 return False
@@ -576,7 +576,7 @@ class NodeCompiler(Compiler):
                 [*_node_tool("npx"), "--yes", "postject",
                  str(exe_path), "NODE_SEA_BLOB", "sea-prep.blob",
                  "--sentinel-fuse", _SEA_FUSE],
-                ctx.log, "postject", cwd=str(ctx.source_dir),
+                ctx.log, "postject", cwd=ctx.source_dir,
                 canceller=ctx.canceller)
             if not ok:
                 return False

@@ -55,7 +55,7 @@ def run_process(cmd: list[str], cwd: Path, env: dict, logger: Logger,
     try:
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=str(cwd), env=env,
+            text=True, cwd=cwd, env=env,
             creationflags=_NO_WINDOW)
     except FileNotFoundError:
         logger.error(f"命令不存在: {cmd}")
