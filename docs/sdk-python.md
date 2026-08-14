@@ -13,6 +13,7 @@
 - [状态上报](#状态上报)
 - [错误处理](#错误处理)
 - [手动接入（调试）](#手动接入调试)
+- [附录：插件入口声明](#附录插件入口声明)
 
 ---
 
@@ -57,8 +58,7 @@ with dghub_sdk.Agent(on_stop=on_stop) as agent:
 
 ## 插件根目录与资源文件
 
-`dghub_sdk.plugin_root()` 返回插件根目录（exe 形态 = exe 所在目录；源码形态 =
-调用文件所在目录；`DGHUB_PLUGIN_ROOT` 环境变量优先，约定绝对路径）：
+`dghub_sdk.plugin_root()` 返回插件根目录（`DGHUB_PLUGIN_ROOT` 环境变量优先）：
 
 ```python
 icon = dghub_sdk.plugin_root() / "assets" / "icon.png"   # 资源统一相对插件根
@@ -183,6 +183,15 @@ python main.py
 ```
 
 或代码中临时 patch：`os.environ["DGHUB_HOST"] / ["DGHUB_PORT"] / ["DGHUB_TOKEN"]`。
+
+## 附录：插件入口声明
+
+Python 插件入口由 `pyproject.toml` 的 `[tool.dghub].entry` 声明（相对清单文件所在目录）。该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时不需要：
+
+```toml
+[tool.dghub]
+entry = "src/main.py"
+```
 
 ---
 
