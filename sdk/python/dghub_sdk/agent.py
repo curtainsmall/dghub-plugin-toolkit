@@ -512,7 +512,7 @@ class Agent:
         manifest_path = self._manifest_dir / "manifest.json"
         if not manifest_path.exists():
             raise FileNotFoundError(f"manifest.json not found: {manifest_path}")
-        with open(manifest_path, "r", encoding="utf-8") as f:
+        with manifest_path.open("r", encoding="utf-8") as f:
             self._manifest = json.loads(f.read())
 
         self._plugin_id = self._manifest.get("id", "")

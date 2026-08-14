@@ -57,14 +57,14 @@ def _read_entry(plugin_dir: Path) -> str:
     return "main.py"
 
 
-def _scan_toplevel_packages(dep_dir: Path) -> list[str]:
+def _scan_toplevel_packages(dep_dir: Path | None) -> list[str]:
     """列出依赖目录中的顶层包名（含 __init__.py 的目录，排除元数据目录）。
 
     仅列目录结构，不解析任何依赖声明；结果供 PyInstaller
     ``--collect-data`` / ``--copy-metadata`` 收集包内数据文件与元数据
     （litellm 等带数据文件的依赖包，PyInstaller 默认只收集 .py 代码）。
     """
-    if not dep_dir.is_dir():
+    if not dep_dir or not dep_dir.is_dir():
         return []
     packages: list[str] = []
     for d in dep_dir.iterdir():
@@ -175,16 +175,17 @@ def build_plugin_exe(
 
 
     # 依赖目录（清单下载产物 .deps，存在才加）
-    if dep_dir and Path(dep_dir).is_dir() and any(Path(dep_dir).iterdir()):
-        cmd += ["--paths", str(dep_dir)]
-        log.detail(f"清单依赖路径: {dep_dir}")
+    deps_dir = Path(dep_dir) if dep_dir else None
+    if deps_dir and deps_dir.is_dir() and any(deps_dir.iterdir()):
+        cmd += ["--paths", str(deps_dir)]
+        log.detail(f"清单依赖路径: {deps_dir}")
 
     # 依赖数据文件与元数据：.deps 所有顶层包逐一收集（litellm 等带数据
     # 文件的包；PyInstaller 默认只收 .py，数据文件须显式声明）
-    dep_pkgs = _scan_toplevel_packages(Path(dep_dir))
+    dep_pkgs = _scan_toplevel_packages(deps_dir)
     for pkg in dep_pkgs:
         cmd += ["--collect-data", pkg]
-        if any(Path(dep_dir).glob(f"{pkg}-*.dist-info")):
+        if any(deps_dir.glob(f"{pkg}-*.dist-info")):
             cmd += ["--copy-metadata", pkg]
     if dep_pkgs:
         log.detail(f"依赖数据收集: {', '.join(dep_pkgs)}")
@@ -195,7 +196,7 @@ def build_plugin_exe(
     if dep_pkgs:
         prev = os.environ.get("PYTHONPATH", "")
         build_env = {**os.environ,
-                     "PYTHONPATH": str(Path(dep_dir).resolve())
+                     "PYTHONPATH": str(deps_dir.resolve())
                      + (os.pathsep + prev if prev else "")}
 
     # 项目根（散装单文件模块：`import utils` 命中 source_dir/utils.py）
@@ -211,7 +212,7 @@ def build_plugin_exe(
     try:
         proc = subprocess.Popen(
             cmd,
-            cwd=str(pdir),
+            cwd=pdir,
             env=build_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

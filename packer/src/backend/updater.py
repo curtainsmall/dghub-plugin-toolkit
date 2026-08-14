@@ -129,7 +129,7 @@ def download_installer(url: str, dest: Path, on_progress=None,
         with urllib.request.urlopen(url, timeout=60) as resp:
             total = int(resp.headers.get("Content-Length") or 0)
             written = 0
-            with open(dest, "wb") as f:
+            with dest.open("wb") as f:
                 while True:
                     if is_cancelled and is_cancelled():
                         raise DownloadCancelled()
