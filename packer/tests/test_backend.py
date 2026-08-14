@@ -9,6 +9,7 @@ from backend.builder import BuildError, evaluate_pattern
 from backend.packaging import package_plugin, cleanup_intermediates
 from backend.pipeline import fill_builder, run_build, validate
 from backend.compilers import COMPILERS, get_compiler
+from backend.py_compiler import _scan_toplevel_packages
 
 
 # ---------------------------------------------------------------------------
@@ -311,3 +312,27 @@ def test_packaging_cleanup(make_project):
     assert not (output / ".pyi").exists()
     assert not (output / "cache").exists()
     assert (output / "testplugin.zip").exists()  # 产物保留
+
+
+# ---------------------------------------------------------------------------
+# py_compiler：.deps 顶层包扫描（依赖数据文件收集）
+# ---------------------------------------------------------------------------
+
+
+def test_scan_toplevel_packages(tmp_path):
+    """只收含 __init__.py 的包目录；跳过元数据/隐藏/散文件。"""
+    deps = tmp_path / "deps"
+    for name in ("aiohttp", "litellm"):
+        pkg_dir = deps / name
+        pkg_dir.mkdir(parents=True)
+        (pkg_dir / "__init__.py").touch()
+    (deps / "aiohttp-3.14.3.dist-info").mkdir()     # 元数据跳过
+    (deps / "ns_pkg").mkdir()                        # 命名空间包（无 __init__）跳过
+    (deps / ".hidden").mkdir()                       # 隐藏目录跳过
+    (deps / "single.py").write_text("x = 1")         # 散文件跳过
+    assert _scan_toplevel_packages(deps) == ["aiohttp", "litellm"]
+
+
+def test_scan_toplevel_packages_missing(tmp_path):
+    """目录不存在返回空列表。"""
+    assert _scan_toplevel_packages(tmp_path / "none") == []

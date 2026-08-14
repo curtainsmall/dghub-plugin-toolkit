@@ -57,6 +57,26 @@ def _read_entry(plugin_dir: Path) -> str:
     return "main.py"
 
 
+def _scan_toplevel_packages(dep_dir: Path) -> list[str]:
+    """列出依赖目录中的顶层包名（含 __init__.py 的目录，排除元数据目录）。
+
+    仅列目录结构，不解析任何依赖声明；结果供 PyInstaller
+    ``--collect-data`` / ``--copy-metadata`` 收集包内数据文件与元数据
+    （litellm 等带数据文件的依赖包，PyInstaller 默认只收集 .py 代码）。
+    """
+    if not dep_dir.is_dir():
+        return []
+    packages: list[str] = []
+    for d in dep_dir.iterdir():
+        if not d.is_dir() or d.name.startswith("."):
+            continue
+        if d.name.endswith(".dist-info") or d.name.endswith(".data"):
+            continue
+        if (d / "__init__.py").is_file():
+            packages.append(d.name)
+    return sorted(packages)
+
+
 def _check_pyinstaller(py_exe: list[str], logger: Logger) -> bool:
     """Verify PyInstaller is available before starting the build.
 
@@ -159,6 +179,25 @@ def build_plugin_exe(
         cmd += ["--paths", str(dep_dir)]
         log.detail(f"清单依赖路径: {dep_dir}")
 
+    # 依赖数据文件与元数据：.deps 所有顶层包逐一收集（litellm 等带数据
+    # 文件的包；PyInstaller 默认只收 .py，数据文件须显式声明）
+    dep_pkgs = _scan_toplevel_packages(Path(dep_dir))
+    for pkg in dep_pkgs:
+        cmd += ["--collect-data", pkg]
+        if any(Path(dep_dir).glob(f"{pkg}-*.dist-info")):
+            cmd += ["--copy-metadata", pkg]
+    if dep_pkgs:
+        log.detail(f"依赖数据收集: {', '.join(dep_pkgs)}")
+
+    # PyInstaller 子进程环境：.deps 注入 PYTHONPATH——spec 执行时
+    # collect_data_files / copy_metadata 需经 sys.path 定位依赖包
+    build_env = None
+    if dep_pkgs:
+        prev = os.environ.get("PYTHONPATH", "")
+        build_env = {**os.environ,
+                     "PYTHONPATH": str(Path(dep_dir).resolve())
+                     + (os.pathsep + prev if prev else "")}
+
     # 项目根（散装单文件模块：`import utils` 命中 source_dir/utils.py）
     cmd += ["--paths", str(sdir)]
     log.detail(f"项目根路径: {sdir}")
@@ -173,6 +212,7 @@ def build_plugin_exe(
         proc = subprocess.Popen(
             cmd,
             cwd=str(pdir),
+            env=build_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
