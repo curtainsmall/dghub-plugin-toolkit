@@ -644,7 +644,7 @@ class ManifestTab(ctk.CTkFrame):
         self._detail_row_frames["default"] = self._detail_default_row
 
         # ---- options 行：按钮列表（+ 添加 / 双击编辑 / X 删除）----
-        self._detail_options: list[str] = []
+        self._detail_options: list[tuple[str, str]] = []
         self._detail_options_row = ctk.CTkFrame(self._detail_form,
                                                 fg_color="transparent")
         self._detail_options_row.pack(fill="x", pady=2)
@@ -656,11 +656,14 @@ class ManifestTab(ctk.CTkFrame):
                      anchor="w").pack(side="left")
         ctk.CTkButton(opts_head, text="+ 添加选项", width=80, height=22,
                       command=self._add_option_detail).pack(side="right")
-        self._options_container = ctk.CTkFrame(self._detail_options_row,
-                                               fg_color="transparent")
+        self._options_container = ctk.CTkScrollableFrame(
+            self._detail_options_row,
+            fg_color=("gray87", "gray20"), corner_radius=6,
+            height=140)
         self._options_container.grid(row=1, column=0, sticky="ew",
                                      padx=(95, 0))
-        self._options_buttons: list[ctk.CTkButton] = []
+        self._options_container.grid_columnconfigure(0, weight=1)
+        self._options_buttons: list[ctk.CTkFrame] = []
         self._detail_row_frames["options"] = self._detail_options_row
 
         for k in ("min", "max", "step"):
@@ -737,8 +740,16 @@ class ManifestTab(ctk.CTkFrame):
         for k in ("min", "max", "step"):
             v = field.get(k)
             self._set_detail_entry(k, "" if v is None else str(v))
-        # options 按钮列表（select 专用）
-        self._detail_options = [str(o) for o in (field.get("options") or [])]
+        # options 按钮列表（select 专用；兼容旧字符串数组格式）
+        self._detail_options = []
+        for o in (field.get("options") or []):
+            if isinstance(o, dict):
+                val = str(o.get("value", ""))
+                lbl = str(o.get("label", "")) or val
+            else:
+                val = lbl = str(o)
+            if val:
+                self._detail_options.append((val, lbl))
         self._refresh_options_display()
         # 行显隐 + 空重建（内部 _rebuild_default_widget 无恢复值）
         self._on_detail_type_changed()
@@ -775,8 +786,8 @@ class ManifestTab(ctk.CTkFrame):
             else:
                 widget.set("A")
         elif new_type == "select":
-            opts = (self._detail_options[:] if self._detail_options
-                    else ["(No Option)"])
+            opts = ([v for v, _ in self._detail_options]
+                    if self._detail_options else ["(No Option)"])
             widget = ctk.CTkOptionMenu(row, values=opts)
             if restore_value in opts:
                 widget.set(restore_value)
@@ -812,35 +823,56 @@ class ManifestTab(ctk.CTkFrame):
         return str(w.get()).strip()
 
     def _refresh_options_display(self) -> None:
-        """重建 options 按钮列表（+ 添加选项 按钮旁）。"""
+        """重建 options 列表（卡片行样式：value + label + X 删除；双击编辑）。"""
         for btn in self._options_buttons:
             btn.destroy()
         self._options_buttons.clear()
-        for i, opt in enumerate(self._detail_options):
-            row_f = ctk.CTkFrame(self._options_container,
-                                 fg_color="transparent")
-            row_f.pack(fill="x", padx=2, pady=1)
-            btn = ctk.CTkButton(
-                row_f, text=opt, anchor="w", height=24,
-                fg_color="transparent", hover_color="#1F5380",
-            )
-            # 双击选项文本 → 编辑
-            btn.bind("<Double-Button-1>",
-                     lambda _e, idx=i: self._edit_option_detail(idx))
-            btn.pack(side="left", fill="x", expand=True)
+        hover_color = ("#D6E4F2", "gray28")
+        for i, (val, lbl) in enumerate(self._detail_options):
+            leave_color = (("gray94", "gray19") if i % 2
+                           else ("gray88", "gray23"))
+            row = ctk.CTkFrame(self._options_container,
+                               fg_color=leave_color, corner_radius=6)
+            row.pack(fill="x", padx=2, pady=2)
+            row.grid_columnconfigure(1, weight=1)
+            ctk.CTkLabel(
+                row, text=val, anchor="w",
+                font=ctk.CTkFont(family="Consolas", size=13, weight="bold")
+            ).grid(row=0, column=0, padx=(6, 6), pady=4)
+            ctk.CTkLabel(
+                row, text=lbl, anchor="e",
+                font=ctk.CTkFont(size=12), text_color="gray"
+            ).grid(row=0, column=1, sticky="ew", padx=(8, 8))
             del_btn = ctk.CTkButton(
-                row_f, text="X", width=26, height=24,
+                row, text="X", width=26, height=24,
                 fg_color="transparent", hover_color="#8B0000",
                 command=lambda idx=i: self._delete_option_detail(idx),
             )
-            del_btn.pack(side="right", padx=(2, 0))
-            self._options_buttons.append(row_f)
+            del_btn.grid(row=0, column=2, padx=(2, 4))
+            # 双击行（X 按钮除外）→ 编辑
+            row.bind("<Double-1>",
+                     lambda e, idx=i: self._edit_option_detail(idx))
+            for child in row.winfo_children():
+                if child is del_btn:
+                    continue
+                child.bind("<Double-1>",
+                           lambda e, idx=i: self._edit_option_detail(idx))
+            # hover 高亮（X 按钮排除，避免与删除反馈色冲突）
+            for w in (row, *[c for c in row.winfo_children()
+                             if c is not del_btn]):
+                w.bind("<Enter>", lambda e, r=row, hc=hover_color:
+                       r.configure(fg_color=hc))
+                w.bind("<Leave>", lambda e, r=row, lc=leave_color:
+                       r.configure(fg_color=lc))
+            self._options_buttons.append(row)
 
-    def _option_prompt(self, title: str, initial: str = "") -> str | None:
-        """选项添加/编辑输入框（对话框——与旧编辑对话框一致）。"""
+    def _option_prompt(self, title: str,
+                       initial: tuple[str, str] = ("", "")) \
+            -> tuple[str, str] | None:
+        """选项添加/编辑对话框（value + label 双输入；label 留空 = 同 value）。"""
         dlg = ctk.CTkToplevel(self)
         dlg.title(title)
-        dlg.geometry("350x120")
+        dlg.geometry("350x160")
         dlg.resizable(False, False)
         dlg.transient(self.winfo_toplevel())
         dlg.grab_set()
@@ -848,54 +880,69 @@ class ManifestTab(ctk.CTkFrame):
         self.winfo_toplevel().update_idletasks()
         x = self.winfo_toplevel().winfo_rootx() + 80
         y = self.winfo_toplevel().winfo_rooty() + 120
-        dlg.geometry(f"350x120+{x}+{y}")
-        ctk.CTkLabel(dlg, text="选项文本:").grid(
+        dlg.geometry(f"350x160+{x}+{y}")
+        ctk.CTkLabel(dlg, text="值 (value):").grid(
             row=0, column=0, padx=10, pady=(10, 0), sticky="w")
-        entry = ctk.CTkEntry(dlg, width=250)
-        entry._is_focused = False
-        entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
-        if initial:
-            entry.insert(0, initial)
-        entry.focus_set()
-        result: list[str | None] = [None]
+        val_entry = ctk.CTkEntry(dlg, width=250)
+        val_entry._is_focused = False
+        val_entry.grid(row=0, column=1, padx=(5, 10), pady=(10, 0))
+        ctk.CTkLabel(dlg, text="标签 (label):").grid(
+            row=1, column=0, padx=10, pady=(6, 0), sticky="w")
+        lbl_entry = ctk.CTkEntry(dlg, width=250)
+        lbl_entry._is_focused = False
+        lbl_entry.grid(row=1, column=1, padx=(5, 10), pady=(6, 0))
+        ctk.CTkLabel(dlg, text="标签留空时默认与值相同",
+                     text_color=("gray50", "gray60"),
+                     font=ctk.CTkFont(size=11)
+                     ).grid(row=2, column=0, columnspan=2,
+                            padx=10, sticky="w")
+        if initial[0]:
+            val_entry.insert(0, initial[0])
+        if initial[1]:
+            lbl_entry.insert(0, initial[1])
+        val_entry.focus_set()
+        result: list[tuple[str, str] | None] = [None]
 
         def on_ok() -> None:
-            val = entry.get().strip()
+            val = val_entry.get().strip()
             if val:
-                result[0] = val
+                lbl = lbl_entry.get().strip() or val
+                result[0] = (val, lbl)
                 dlg.destroy()
 
         def on_cancel() -> None:
             dlg.destroy()
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
-        btn_row.grid(row=1, column=0, columnspan=2, sticky="e", pady=(15, 10))
+        btn_row.grid(row=3, column=0, columnspan=2, sticky="e", pady=(15, 10))
         ctk.CTkButton(btn_row, text="取消", width=100,
                       command=on_cancel).pack(side="right", padx=5)
         ctk.CTkButton(btn_row, text="确定", width=100,
                       command=on_ok).pack(side="right", padx=5)
-        entry.bind("<Return>", lambda _e: on_ok())
+        val_entry.bind("<Return>", lambda _e: on_ok())
+        lbl_entry.bind("<Return>", lambda _e: on_ok())
         dlg.wait_window()
         return result[0]
 
     def _add_option_detail(self) -> None:
-        """添加选项（对话框输入，重复项忽略）。"""
+        """添加选项（对话框输入，value 重复项忽略）。"""
         val = self._option_prompt("添加选项")
-        if val is None or val in self._detail_options:
+        if val is None or any(v == val[0] for v, _ in self._detail_options):
             return
         self._detail_options.append(val)
         self._refresh_options_display()
         self._save_detail_field()
 
     def _edit_option_detail(self, idx: int) -> None:
-        """双击选项 → 编辑文本。"""
+        """双击选项 → 编辑 value/label。"""
         if idx < 0 or idx >= len(self._detail_options):
             return
         old = self._detail_options[idx]
         val = self._option_prompt("编辑选项", initial=old)
-        if val is None or not val:
+        if val is None or not val[0]:
             return
-        if val in self._detail_options and val != old:
+        if any(v == val[0] for v, _ in self._detail_options) \
+                and val[0] != old[0]:
             return
         self._detail_options[idx] = val
         self._refresh_options_display()
@@ -979,10 +1026,11 @@ class ManifestTab(ctk.CTkFrame):
                     field[k] = float(raw) if "." in raw else int(raw)
                 except ValueError:
                     pass
-        # options（select，按钮列表写回）
+        # options（select，按钮列表写回——服务端要求的条目列表格式）
         field.pop("options", None)
         if ftype == "select" and self._detail_options:
-            field["options"] = list(self._detail_options)
+            field["options"] = [{"value": v, "label": l}
+                                for v, l in self._detail_options]
         self._refresh_fields_display()
         self._auto_save()
 
