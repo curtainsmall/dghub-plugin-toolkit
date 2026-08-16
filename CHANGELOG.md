@@ -7,6 +7,30 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（版本跳号为预期行为）。
 
+## [0.13.0] - 2026-08-17
+
+### 新增
+
+- **SDK (TypeScript)**：事件驱动 API——`Agent` 继承 `EventEmitter`，消息到达
+  即分发到 `AgentEvent.*` 事件，无需手动 `poll()`；`AgentEvent` 枚举：
+  `Ready` / `Config` / `ConfigChanged` / `DeviceInfo` / `Stop` / `Ping` /
+  `Error`；`on` / `once` / `off` 类型化重载（事件名集合封闭、参数随事件名
+  类型检查）
+- **SDK (TypeScript)**：`waitForClose()`——ws 关闭后 resolve 的 Promise
+
+### 变更
+
+- **SDK (TypeScript)**：移除 `poll()` / `getException()` / `sendTimeout` /
+  `waitThreadingExit`——错误处理改订阅 `AgentEvent.Error`（无人订阅时按
+  Node 惯例抛出）；构造参数 `on*` 回调保留为事件注册语法糖
+- **SDK (TypeScript)**：tsconfig 显式 `types: ["node"]`
+- **Demo**：tetris-ts 改用事件驱动用法；README 与 sdk-typescript.md 同步更新
+
+### 修复
+
+- **SDK (TypeScript)**：修复握手完成后 `connected` 被立即置回 `false`、
+  `waitReady()` 实际无法成功 resolve 的问题（后台循环退出逻辑残留）
+
 ## [0.12.1] - 2026-08-15
 
 ### 修复
