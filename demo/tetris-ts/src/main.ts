@@ -5,7 +5,7 @@
  * 暂停覆盖层、DAS 连发与软降加速。渲染走 @kmamal/sdl 像素上屏。
  */
 
-import { Agent, Action, LogLevel } from "dghub-sdk";
+import { Agent, Action, AgentEvent, LogLevel } from "dghub-sdk";
 import { Tetris } from "./game.js";
 import { SdlRenderer, WIDTH, HEIGHT } from "./render.js";
 
@@ -27,7 +27,11 @@ function onConfig(configs: Record<string, unknown>): void {
 }
 
 function main(): void {
-  const agent = new Agent({ onConfig, onConfigChanged });
+  const agent = new Agent();
+  // 事件驱动：消息到达即触发，无需 poll
+  agent.on(AgentEvent.Config, onConfig);
+  agent.on(AgentEvent.ConfigChanged, onConfigChanged);
+  agent.on(AgentEvent.Error, (err) => console.error(`[SDK 错误] ${err}`));
   agent.start();
 
   const renderer = new SdlRenderer();
@@ -86,12 +90,10 @@ function main(): void {
     process.exit(0);
   });
 
-  // 等待握手（不阻塞窗口，连接失败由 getException 查询）
+  // 等待握手（不阻塞窗口，连接失败由 Error 事件上报）
   agent.waitReady(10)
     .then(() => agent.sendLog(LogLevel.INFO, "tetris-ts started"))
-    .catch(() => {
-      agent.getException();
-    });
+    .catch(() => { /* 错误已通过 AgentEvent.Error 上报 */ });
 
   const FPS = 30;
   const frameMs = 1000 / FPS;
@@ -101,11 +103,6 @@ function main(): void {
     const now = Date.now();
     const dt = Math.min((now - lastFrame) / 1000, 0.1);
     lastFrame = now;
-
-    agent.poll();
-    while (agent.getException() !== null) {
-      // 排空后台异常（连接失败等）
-    }
 
     // 暂停：插件开关关闭时，丢弃瞬时输入避免恢复卡住
     if (!activated) {

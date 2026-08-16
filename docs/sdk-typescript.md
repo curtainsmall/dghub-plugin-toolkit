@@ -29,31 +29,41 @@ npm install dghub-sdk
 ## 快速开始
 
 ```ts
-import { Agent } from "dghub-sdk";
+import { Agent, AgentEvent } from "dghub-sdk";
 
-let running = true;
-
-const agent = new Agent({
-  onStop: (reason) => { running = false; },
+const agent = new Agent();
+agent.on(AgentEvent.Stop, (reason) => {
+  console.log(`服务端要求停止：${reason}`);
 });
 agent.start();
 await agent.waitReady(10);   // 等待握手完成
-while (running) {
-  agent.poll();
-  // 你的游戏 / 业务逻辑
-}
+// 之后无需手动 poll：消息到达即触发事件
 ```
 
 `Agent` 关键 API：
 
 | API | 用途 |
 |-----|------|
-| `new Agent({ onStop, onConfig, onConfigChanged, manifestDir })` | 构造 |
+| `new Agent({ onStop, onConfig, onConfigChanged, manifestDir })` | 构造；`on*` 回调等价于对应事件注册 |
+| `agent.on(AgentEvent.X, listener)` / `once` / `off` | 订阅 / 退订事件（事件名集合封闭，参数随事件名类型检查） |
 | `start()` | 启动连接（不等待握手） |
 | `waitReady(timeout)` | 等待握手完成；失败 Promise 拒绝 |
+| `waitForClose()` | 等待连接循环结束（ws 关闭后 resolve） |
 | `isReady()` | 非阻塞检查是否就绪 |
-| `poll(timeout?)` | 取出收到的消息并触发回调（默认非阻塞） |
-| `getException()` | 读取后台异常（见[错误处理](#错误处理)） |
+
+### 事件一览
+
+| 事件 | 触发时机 | 监听器签名 |
+|------|----------|-----------|
+| `AgentEvent.Ready` | 握手成功（hello_ack） | `(data: Record<string, unknown>) => void` |
+| `AgentEvent.Config` | 握手后推送全量配置 | `(config: Record<string, unknown>) => void` |
+| `AgentEvent.ConfigChanged` | 用户修改单个配置字段 | `(key: string, value: boolean \| number \| string) => void` |
+| `AgentEvent.DeviceInfo` | 设备状态变化 | `(connected: boolean, deviceType: DeviceType, maxA: number, maxB: number) => void` |
+| `AgentEvent.Stop` | 服务端要求插件停止 | `(reason: string) => void` |
+| `AgentEvent.Ping` | 服务端 ping（SDK 自动回 pong） | `(t: number) => void` |
+| `AgentEvent.Error` | 连接 / 解析 / 发送错误 | `(err: Error) => void` |
+
+事件名是具名常量（`AgentEvent` 枚举），拼错成员名在编译期报错。
 
 ## 插件根目录与资源文件
 
@@ -72,18 +82,17 @@ const icon = join(pluginRoot(), "assets", "icon.png");   // 资源统一相对�
 
 ## 配置监听
 
-| 回调 | 触发时机 | 签名 |
+| 事件 | 触发时机 | 签名 |
 |------|----------|------|
-| `onConfig` | 握手完成后，推送全量配置 | `(config: Record<string, unknown>) => void` |
-| `onConfigChanged` | 用户在前端修改单个字段 | `(key: string, value: boolean \| number \| string) => void` |
+| `AgentEvent.Config` | 握手完成后，推送全量配置 | `(config: Record<string, unknown>) => void` |
+| `AgentEvent.ConfigChanged` | 用户在前端修改单个字段 | `(key: string, value: boolean \| number \| string) => void` |
 
 ```ts
 const config: Record<string, unknown> = {};
 
-const agent = new Agent({
-  onConfig: (cfg) => { Object.assign(config, cfg); },
-  onConfigChanged: (key, value) => { config[key] = value; },
-});
+const agent = new Agent();
+agent.on(AgentEvent.Config, (cfg) => { Object.assign(config, cfg); });
+agent.on(AgentEvent.ConfigChanged, (key, value) => { config[key] = value; });
 agent.start();
 await agent.waitReady(10);
 ```
@@ -138,7 +147,7 @@ agent.sendTrigger({ action: Action.WAVEFORM, preset: "振动-短", durationS: 0.
 `sendPulse()`、`sendSetStrength()`、`sendAdjustStrength()`。
 
 `name`/`cause`/`pulseName` 补充事件内容、原因与波形名。V4 多设备：
-`onDeviceInfo` 收到 `DeviceType.V4`；省略 `targetId` 时使用插件默认目标，
+`AgentEvent.DeviceInfo` 收到 `DeviceType.V4`；省略 `targetId` 时使用插件默认目标，
 仅需发给另一台 V4 设备时传消息级 `targetId`（V2/V3 与旧调用不受影响；
 `targetId` 由 DGHub 管理，勿用 `sendSetConfig()` 修改）。
 
@@ -159,18 +168,20 @@ agent.sendStatusField("tick", 42);
 
 ## 错误处理
 
-后台连接异常被收集，主循环中检查：
+连接 / 解析 / 发送错误统一通过 `AgentEvent.Error` 事件上报：
 
 ```ts
-while (running) {
-  agent.poll();
-  let exc = agent.getException();
-  while (exc !== null) {
-    console.error(`[错误] ${exc}`);
-    exc = agent.getException();
-  }
-}
+const agent = new Agent();
+agent.on(AgentEvent.Error, (err) => {
+  console.error(`[SDK 错误] ${err}`);
+});
 ```
+
+> 按 Node 惯例（EventEmitter），**Error 事件无人订阅时会直接抛出**（进程崩溃）。
+> 插件应始终订阅 `AgentEvent.Error`。
+
+启动阶段的错误（manifest 缺失、token 未设置、握手失败）同时会让
+`waitReady()` 的 Promise 拒绝——二选一处理即可，避免重复上报。
 
 ## 手动接入（调试）
 

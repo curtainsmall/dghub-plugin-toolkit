@@ -81,3 +81,24 @@ export enum DeviceType {
   V4 = "v4",
   UNKNOWN = "",
 }
+
+/**
+ * Agent 可订阅的事件名（Node EventEmitter 事件，字符串值即事件名）。
+ * 事件名集合封闭：`agent.on(AgentEvent.X, ...)` 拼错成员名会在编译期报错。
+ */
+export enum AgentEvent {
+  /** 握手成功（hello_ack）。 */
+  Ready = "ready",
+  /** 握手后服务端推送一次全量配置。 */
+  Config = "config",
+  /** 单个配置项变更。 */
+  ConfigChanged = "configChanged",
+  /** 设备状态变化。 */
+  DeviceInfo = "deviceInfo",
+  /** 服务端要求插件停止。 */
+  Stop = "stop",
+  /** 服务端 ping（SDK 自动回 pong）。 */
+  Ping = "ping",
+  /** 连接/解析/发送错误。按 Node 惯例，无人订阅时抛出。 */
+  Error = "error",
+}

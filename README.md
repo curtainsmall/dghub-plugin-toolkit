@@ -1,4 +1,4 @@
-﻿# DGHub SDK Toolkit
+# DGHub SDK Toolkit
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5%2B-blue)
@@ -38,17 +38,15 @@ npm install dghub-sdk
 ```
 
 ```ts
-import { Agent } from "dghub-sdk";
+import { Agent, AgentEvent, LogLevel } from "dghub-sdk";
 
-let running = true;
-const agent = new Agent({
-  onStop: () => { running = false; },
-});
+const agent = new Agent();
+// 事件驱动：消息到达即触发，无需手动 poll
+agent.on(AgentEvent.Ready, () => agent.sendLog(LogLevel.INFO, "started"));
+agent.on(AgentEvent.ConfigChanged, (key, value) => console.log(key, value));
+agent.on(AgentEvent.Error, (err) => console.error(err));  // 务必订阅 Error
 agent.start();
-await agent.waitReady(10);   // 等待握手完成后再 poll
-while (running) {
-  agent.poll();
-}
+await agent.waitReady(10);   // 等待握手完成后再发送
 ```
 
 详细用法参见 [Python SDK 使用指南](docs/sdk-python.md) 与 [TypeScript SDK 使用指南](docs/sdk-typescript.md)。
