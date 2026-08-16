@@ -1,60 +1,75 @@
 /**
- * WebSocket 连接管理器 —— 与 Python SDK 的 `dghub_sdk.agent.Agent` 功能一致。
+ * WebSocket 连接管理器 —— Node 事件驱动版。
  *
- * Node 版用 async/await 直连（ws 库），消息先入队，用户线程调用 `poll()`
- * 时再分发到各回调；`waitReady()` 返回 Promise 等待握手完成。
+ * 与 Python SDK 的 `dghub_sdk.agent.Agent` 功能一致，但 API 采用 Node 惯例：
+ * `Agent` 继承 `EventEmitter`，收到的服务端消息**到达即分发**到对应事件
+ * （`AgentEvent.*`），插件无需（也不能）手动 poll。
+ *
+ * 错误通过 `AgentEvent.Error` 事件上报；按 Node 惯例，Error 事件无人订阅时
+ * 会直接抛出（进程崩溃），插件应始终订阅。
  */
 
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import WebSocket from "ws";
 
 import { Codec, CodecMessage } from "./codec.js";
-import { Action, Channel, CheckState, DeviceType, LogLevel, OpCode, StrengthMode } from "./enums.js";
+import {
+  Action,
+  AgentEvent,
+  Channel,
+  CheckState,
+  DeviceType,
+  LogLevel,
+  OpCode,
+  StrengthMode,
+} from "./enums.js";
 import { envConfig, manifestDir, pluginRoot } from "./paths.js";
 
-/** Agent 构造参数（对应 Python `Agent.__init__` 的命名参数）。 */
+/** 事件名 → 监听器签名：事件参数随事件名做类型检查。 */
+export interface AgentEventMap {
+  [AgentEvent.Ready]: (data: Record<string, unknown>) => void;
+  [AgentEvent.Config]: (config: Record<string, unknown>) => void;
+  [AgentEvent.ConfigChanged]: (
+    key: string,
+    value: boolean | number | string,
+  ) => void;
+  [AgentEvent.DeviceInfo]: (
+    connected: boolean,
+    deviceType: DeviceType,
+    maxA: number,
+    maxB: number,
+  ) => void;
+  [AgentEvent.Stop]: (reason: string) => void;
+  [AgentEvent.Ping]: (t: number) => void;
+  [AgentEvent.Error]: (err: Error) => void;
+}
+
+/** Agent 构造参数。`on*` 回调是事件注册的语法糖（等价于 `agent.on(AgentEvent.X, fn)`）。 */
 export interface AgentOptions {
   /** 包含 manifest.json 的目录；默认插件根（支持 DGHUB_MANIFEST_DIR 注入）。 */
   manifestDir?: string;
   /** WebSocket 连接的最大重试次数。 */
   maxRetries?: number;
-  /** 每次发送操作的可选超时（秒）。undefined = 发完即返回。 */
-  sendTimeout?: number;
   /** 握手成功后调用，传入 hello_ack 数据。 */
-  onReady?: (data: Record<string, unknown>) => void;
+  onReady?: AgentEventMap[AgentEvent.Ready];
   /** 握手后服务端推送一次全量配置时调用。 */
-  onConfig?: (config: Record<string, unknown>) => void;
+  onConfig?: AgentEventMap[AgentEvent.Config];
   /** 单个配置项变更时调用。 */
-  onConfigChanged?: (key: string, value: boolean | number | string) => void;
+  onConfigChanged?: AgentEventMap[AgentEvent.ConfigChanged];
   /** 设备状态变化时调用。签名：(connected, deviceType, maxA, maxB)。 */
-  onDeviceInfo?: (connected: boolean, deviceType: DeviceType, maxA: number, maxB: number) => void;
+  onDeviceInfo?: AgentEventMap[AgentEvent.DeviceInfo];
   /** 服务端要求插件停止时调用。 */
-  onStop?: (reason: string) => void;
+  onStop?: AgentEventMap[AgentEvent.Stop];
   /** 收到服务端 ping 时调用，传入时间戳。 */
-  onPing?: (t: number) => void;
+  onPing?: AgentEventMap[AgentEvent.Ping];
 }
 
-/** 发送操作排队用的内部包装。 */
-interface SendTask {
-  raw: string;
-  resolve: () => void;
-  reject: (err: Error) => void;
-}
-
-export class Agent {
-  // -- 公开回调 --
-  onReady?: (data: Record<string, unknown>) => void;
-  onConfig?: (config: Record<string, unknown>) => void;
-  onConfigChanged?: (key: string, value: boolean | number | string) => void;
-  onDeviceInfo?: (connected: boolean, deviceType: DeviceType, maxA: number, maxB: number) => void;
-  onStop?: (reason: string) => void;
-  onPing?: (t: number) => void;
-
+export class Agent extends EventEmitter {
   // -- 内部状态 --
   private _manifestDir: string;
   private _maxRetries: number;
-  private _sendTimeout?: number;
   private _ws: WebSocket | null = null;
   private _token = "";
   private _manifest: Record<string, unknown> = {};
@@ -65,28 +80,58 @@ export class Agent {
   private _readyReject: ((err: Error) => void) | null = null;
   private _startupException: Error | null = null;
   private _readyPromise: Promise<void> | null = null;
-  private _queue: CodecMessage[] = [];
-  private _errorQueue: Error[] = [];
-  /** 发送任务队列：握手完成前缓冲，连接后按序发出。 */
-  private _sendQueue: SendTask[] = [];
-  private _sendFlush: (() => void) | null = null;
+  private _closedResolve: (() => void) | null = null;
+  private _closedPromise: Promise<void> = Promise.resolve();
+  /** 发送缓冲：握手完成前入队，连接后按序发出。 */
+  private _sendQueue: string[] = [];
 
   // 启动检查状态
   private _checkTitle = "Startup Check";
   private _checkSteps = new Map<string, Record<string, unknown>>();
 
   constructor(options: AgentOptions = {}) {
+    super();
     // --- 解析 manifest 目录（显式 → DGHUB_MANIFEST_DIR → 插件根） ---
     this._manifestDir = manifestDir(options.manifestDir);
     this._maxRetries = options.maxRetries ?? 5;
-    this._sendTimeout = options.sendTimeout;
 
-    this.onReady = options.onReady;
-    this.onConfig = options.onConfig;
-    this.onConfigChanged = options.onConfigChanged;
-    this.onDeviceInfo = options.onDeviceInfo;
-    this.onStop = options.onStop;
-    this.onPing = options.onPing;
+    // 构造回调 = 事件注册语法糖
+    if (options.onReady) this.on(AgentEvent.Ready, options.onReady);
+    if (options.onConfig) this.on(AgentEvent.Config, options.onConfig);
+    if (options.onConfigChanged)
+      this.on(AgentEvent.ConfigChanged, options.onConfigChanged);
+    if (options.onDeviceInfo)
+      this.on(AgentEvent.DeviceInfo, options.onDeviceInfo);
+    if (options.onStop) this.on(AgentEvent.Stop, options.onStop);
+    if (options.onPing) this.on(AgentEvent.Ping, options.onPing);
+  }
+
+  // -- 事件 API ------------------------------------------------------------
+  // 事件名集合封闭为 AgentEvent：字符串事件名在此类上不可用（编译期拦截），
+  // 监听器参数按事件名类型检查（AgentEventMap）。
+
+  /** 订阅事件。 */
+  override on<E extends AgentEvent>(
+    event: E,
+    listener: AgentEventMap[E],
+  ): this {
+    return super.on(event, listener);
+  }
+
+  /** 订阅事件（只触发一次后自动退订）。 */
+  override once<E extends AgentEvent>(
+    event: E,
+    listener: AgentEventMap[E],
+  ): this {
+    return super.once(event, listener);
+  }
+
+  /** 退订事件。 */
+  override off<E extends AgentEvent>(
+    event: E,
+    listener: AgentEventMap[E],
+  ): this {
+    return super.off(event, listener);
   }
 
   // -- 属性 ----------------------------------------------------------
@@ -108,11 +153,12 @@ export class Agent {
     this._stopped = false;
     this._connected = false;
     this._startupException = null;
-    this._queue = [];
-    this._errorQueue = [];
     this._readyPromise = new Promise<void>((resolve, reject) => {
       this._readyResolve = resolve;
       this._readyReject = reject;
+    });
+    this._closedPromise = new Promise<void>((resolve) => {
+      this._closedResolve = resolve;
     });
     void this._connectAndLoop();
   }
@@ -123,24 +169,27 @@ export class Agent {
       return Promise.reject(new Error("Agent has not been started"));
     }
     return new Promise<void>((resolve, reject) => {
-      const timer = timeout === undefined
-        ? undefined
-        : setTimeout(() => reject(new Error("Agent did not become ready before timeout")), timeout * 1000);
-      this._readyPromise!
-        .then(() => {
-          if (timer) clearTimeout(timer);
-          if (this._connected) {
-            resolve();
-          } else if (this._startupException) {
-            reject(this._startupException);
-          } else {
-            reject(new Error("Agent stopped before handshake completed"));
-          }
-        })
-        .catch((err: Error) => {
-          if (timer) clearTimeout(timer);
-          reject(err);
-        });
+      const timer =
+        timeout === undefined
+          ? undefined
+          : setTimeout(
+              () =>
+                reject(new Error("Agent did not become ready before timeout")),
+              timeout * 1000,
+            );
+      this._readyPromise!.then(() => {
+        if (timer) clearTimeout(timer);
+        if (this._connected) {
+          resolve();
+        } else if (this._startupException) {
+          reject(this._startupException);
+        } else {
+          reject(new Error("Agent stopped before handshake completed"));
+        }
+      }).catch((err: Error) => {
+        if (timer) clearTimeout(timer);
+        reject(err);
+      });
     });
   }
 
@@ -149,28 +198,10 @@ export class Agent {
     return this._connected;
   }
 
-  /** 处理已接收的消息，在当前线程上调用回调。timeout 秒内最多阻塞取一条。 */
-  poll(timeout?: number): void {
-    if (timeout === undefined) {
-      while (this._queue.length > 0) {
-        const msg = this._queue.shift()!;
-        this._invoke(msg);
-      }
-      return;
-    }
-    const deadline = Date.now() + timeout * 1000;
-    while (this._queue.length === 0 && Date.now() < deadline) {
-      // 忙等：等待接收循环入队（Node 事件循环不阻塞时消息即到）
-      this._sleep(5);
-    }
-    if (this._queue.length > 0) {
-      this._invoke(this._queue.shift()!);
-    }
-  }
-
-  /** 通知后台循环停止并断开连接。 */
+  /** 通知后台连接停止并断开。 */
   stop(): void {
     this._stopped = true;
+    this._connected = false;
     if (this._ws && this._ws.readyState === WebSocket.OPEN) {
       try {
         this._ws.close();
@@ -181,10 +212,9 @@ export class Agent {
     }
   }
 
-  /** 等待连接循环退出（可选项；Promise 在循环结束后 resolve）。 */
-  async waitThreadingExit(timeout?: number): Promise<void> {
-    // ws 连接关闭后循环自然退出；此处给事件循环一个退出的机会
-    await this._sleep(timeout ?? 0.1);
+  /** 等待连接循环结束（ws 关闭后 resolve；连接失败时立即 resolve）。 */
+  waitForClose(): Promise<void> {
+    return this._closedPromise;
   }
 
   // -- 公开发送方法（均为同步，立即调度） ----------------------------------
@@ -213,33 +243,49 @@ export class Agent {
   }
 
   /** 发送一次性命名事件。 */
-  sendEvent(label: string, name: string, options: {
-    username?: string | null;
-    strengthPct?: number | null;
-    duration?: number;
-    eventId?: string | null;
-    cause?: string | null;
-    pulseName?: string | null;
-    fromPct?: number | null;
-    toPct?: number | null;
-    deltaPct?: number | null;
-    targetId?: string | null;
-  } = {}): void {
+  sendEvent(
+    label: string,
+    name: string,
+    options: {
+      username?: string | null;
+      strengthPct?: number | null;
+      duration?: number;
+      eventId?: string | null;
+      cause?: string | null;
+      pulseName?: string | null;
+      fromPct?: number | null;
+      toPct?: number | null;
+      deltaPct?: number | null;
+      targetId?: string | null;
+    } = {},
+  ): void {
     this._scheduleSend(Codec.event(label, name, options));
   }
 
   /** 发送仅波形的脉冲（不改变强度）。 */
-  sendPulse(preset: string, channel: Channel = Channel.BOTH, targetId?: string | null): void {
+  sendPulse(
+    preset: string,
+    channel: Channel = Channel.BOTH,
+    targetId?: string | null,
+  ): void {
     this._scheduleSend(Codec.pulse(preset, channel, targetId));
   }
 
   /** 设置指定通道的绝对强度（0–100）。 */
-  sendSetStrength(channel: Channel, pct: number, targetId?: string | null): void {
+  sendSetStrength(
+    channel: Channel,
+    pct: number,
+    targetId?: string | null,
+  ): void {
     this._scheduleSend(Codec.setStrength(channel, pct, targetId));
   }
 
   /** 按相对增量调整强度（-100 到 100）。 */
-  sendAdjustStrength(channel: Channel, deltaPct: number, targetId?: string | null): void {
+  sendAdjustStrength(
+    channel: Channel,
+    deltaPct: number,
+    targetId?: string | null,
+  ): void {
     this._scheduleSend(Codec.adjustStrength(channel, deltaPct, targetId));
   }
 
@@ -308,14 +354,7 @@ export class Agent {
     this._scheduleSend(Codec.setConfig(key, value));
   }
 
-  // -- 公开异常查询 ------------------------------------------------------
-
-  /** 返回后台捕获的一个异常，无则返回 null（应循环获取直到 null）。 */
-  getException(): Error | null {
-    return this._errorQueue.shift() ?? null;
-  }
-
-  // -- 内部：连接与接收循环 --------------------------------------------------
+  // -- 内部：连接与消息分发 --------------------------------------------------
 
   private async _connectAndLoop(): Promise<void> {
     try {
@@ -361,42 +400,50 @@ export class Agent {
       }
 
       this._connected = true;
-      this._queue.push({
-        op: OpCode.HELLO_ACK,
-        data: {
-          accepted: ack.accepted,
-          reason: ack.reason,
-          sdk_version: ack.sdk_version,
-        },
+      this.emit(AgentEvent.Ready, {
+        accepted: ack.accepted,
+        reason: ack.reason,
+        sdk_version: ack.sdk_version,
       });
       this._readyResolve?.();
 
-      // ---- 接收循环 ----
+      // ---- 接收循环（事件驱动：消息到达立即分发到 AgentEvent） ----
       ws.on("message", (data) => {
         if (this._stopped) {
           return;
         }
-        const msg = Codec.parse(data.toString());
+        let msg: CodecMessage;
+        try {
+          msg = Codec.parse(data.toString());
+        } catch (err) {
+          this.emit(
+            AgentEvent.Error,
+            err instanceof Error ? err : new Error(String(err)),
+          );
+          return;
+        }
         if (msg.op === OpCode.PING) {
           try {
             ws.send(JSON.stringify({ op: "pong", t: msg.t }));
           } catch {
             // 连接可能已关闭
           }
-          this._queue.push(msg);
-        } else {
-          this._queue.push(msg);
-          if (msg.op === OpCode.STOP) {
-            this.stop();
-          }
+        }
+        this._dispatch(msg);
+        if (msg.op === OpCode.STOP) {
+          this.stop();
         }
       });
       ws.on("close", () => {
         this._connected = false;
-        this._readyReject?.(new Error("Agent stopped before handshake completed"));
+        this._closedResolve?.();
+        this._closedResolve = null;
       });
       ws.on("error", (err) => {
-        this._errorQueue.push(err instanceof Error ? err : new Error(String(err)));
+        this.emit(
+          AgentEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+        );
       });
 
       // 连接就绪后冲刷缓冲的发送任务
@@ -406,10 +453,11 @@ export class Agent {
       if (!this._connected) {
         this._startupException = exc;
       }
-      this._errorQueue.push(exc);
+      // 先拒绝 waitReady，再上报 Error 事件（无人订阅时按 Node 惯例抛出）
       this._readyReject?.(exc);
-    } finally {
-      this._connected = false;
+      this._closedResolve?.();
+      this._closedResolve = null;
+      this.emit(AgentEvent.Error, exc);
     }
   }
 
@@ -456,12 +504,15 @@ export class Agent {
         this._ws.send(raw);
         return;
       } catch (err) {
-        this._errorQueue.push(err instanceof Error ? err : new Error(String(err)));
+        this.emit(
+          AgentEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+        );
       }
     }
     // 握手未完成或发送失败：入队等待冲刷
     if (!this._connected) {
-      this._sendQueue.push({ raw, resolve: () => {}, reject: () => {} });
+      this._sendQueue.push(raw);
     }
   }
 
@@ -470,56 +521,51 @@ export class Agent {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
       return;
     }
-    for (const task of this._sendQueue) {
+    for (const raw of this._sendQueue) {
       try {
-        this._ws.send(task.raw);
-        task.resolve();
+        this._ws.send(raw);
       } catch (err) {
-        task.reject(err instanceof Error ? err : new Error(String(err)));
+        this.emit(
+          AgentEvent.Error,
+          err instanceof Error ? err : new Error(String(err)),
+        );
       }
     }
     this._sendQueue = [];
   }
 
-  // -- 内部：分发 ----------------------------------------------------------
+  // -- 内部：事件分发 --------------------------------------------------------
 
-  private _invoke(msg: CodecMessage): void {
+  /** 将一条服务端消息分发到对应事件（消息到达时由 ws 回调调用）。 */
+  private _dispatch(msg: CodecMessage): void {
     switch (msg.op) {
-      case OpCode.HELLO_ACK:
-        if (this.onReady && msg.data) {
-          this.onReady(msg.data);
-        }
-        break;
       case OpCode.CONFIG:
-        if (this.onConfig) {
-          this.onConfig(msg.data ?? {});
-        }
+        this.emit(AgentEvent.Config, msg.data ?? {});
         break;
       case OpCode.CONFIG_CHANGED:
-        if (this.onConfigChanged) {
-          this.onConfigChanged(msg.key ?? "", msg.value ?? "");
-        }
+        this.emit(AgentEvent.ConfigChanged, msg.key ?? "", msg.value ?? "");
         break;
       case OpCode.DEVICE_INFO:
-        if (this.onDeviceInfo && msg.connected !== undefined
-          && msg.deviceType !== undefined
-          && msg.maxStrengthA !== undefined
-          && msg.maxStrengthB !== undefined) {
-          this.onDeviceInfo(
-            msg.connected, msg.deviceType,
-            msg.maxStrengthA, msg.maxStrengthB,
+        if (
+          msg.connected !== undefined &&
+          msg.deviceType !== undefined &&
+          msg.maxStrengthA !== undefined &&
+          msg.maxStrengthB !== undefined
+        ) {
+          this.emit(
+            AgentEvent.DeviceInfo,
+            msg.connected,
+            msg.deviceType,
+            msg.maxStrengthA,
+            msg.maxStrengthB,
           );
         }
         break;
       case OpCode.STOP:
-        if (this.onStop) {
-          this.onStop(msg.reason ?? "");
-        }
+        this.emit(AgentEvent.Stop, msg.reason ?? "");
         break;
       case OpCode.PING:
-        if (this.onPing) {
-          this.onPing(msg.t ?? 0);
-        }
+        this.emit(AgentEvent.Ping, msg.t ?? 0);
         break;
       default:
         break;
