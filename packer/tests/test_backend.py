@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from backend.builder import BuildError, evaluate_pattern
+from backend.debug_runner import resolve_run_command
 from backend.packaging import package_plugin, cleanup_intermediates
 from backend.pipeline import fill_builder, run_build, validate
 from backend.compilers import COMPILERS, get_compiler
@@ -203,6 +204,18 @@ def test_node_compiler_bundle_validate(make_project):
                                        "bundle": "fat"}, plugin_dir))
 
 
+def test_resolve_run_command(tmp_path):
+    """调试运行命令解析：.py 入口经 Python 解释器执行，exe 直接执行。"""
+    py_entry = tmp_path / "start_node.py"
+    py_entry.write_text("x")
+    cmd = resolve_run_command(py_entry)
+    assert cmd[-1].endswith("start_node.py")
+    assert len(cmd) == 2  # [python, entry]
+    exe_entry = tmp_path / "plugin.exe"
+    exe_entry.write_text("x")
+    assert resolve_run_command(exe_entry) == [str(exe_entry)]
+
+
 # ---------------------------------------------------------------------------
 # pipeline：validate / fill / run_build
 # ---------------------------------------------------------------------------
@@ -244,6 +257,30 @@ def test_fill_builder_only_fills_empty(make_project, make_ctx):
     applied = fill_builder(ctx2)
     assert applied and any("已刷新" in a for a in applied)
     assert len(b.items()) == 0  # derived 全清，用户条目无
+
+
+def test_fill_builder_merges_deduced(make_project, make_ctx):
+    """fill 合并去重：已有 entry（手动）时不重复推断入口，但补缺失的
+    编译产物目录（node_modules / dist / _internal）。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "package.json").write_text(
+        json.dumps({"main": "dist/main.js"}))
+    (plugin_dir / "dist").mkdir()
+    (plugin_dir / "dist" / "main.js").write_text("x")
+    # 用户手动标了 entry（无 derived）
+    b.add_file("my-entry.js", ["entry"])
+    pm.set_field("compiler", {"compile_system": "node",
+                              "manifest": "package.json"})
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                      compile_cfg={"manifest": "package.json"})
+    applied = fill_builder(ctx)
+    items = b.items()
+    # entry 不被重复推断（仍只有用户那个）
+    entries = [i for i in items if "entry" in i.tags]
+    assert len(entries) == 1 and entries[0].path == "my-entry.js"
+    # 缺失的 node_modules / dist 被补上
+    dirs = sorted(i.dir for i in items if i.dir)
+    assert dirs == ["dist", "node_modules"]
 
 
 def test_run_build_no_compile(make_project, make_ctx):

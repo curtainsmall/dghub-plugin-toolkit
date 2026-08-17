@@ -300,6 +300,20 @@ class BuildTab(ctk.CTkFrame):
         if self._on_fill_builder:
             self._on_fill_builder()
 
+    def clear_derived(self) -> None:
+        """清除 deduce 生成的编译产物条目（编译设置变化后旧产物失效）。
+
+        编译系统/产物模式切换后由 app 调用——derived 条目（exe /
+        start_node.py / node_modules / dist / _internal）不再匹配当前
+        编译配置，用户需重新按「从编译填充」。
+        """
+        b = self._builder()
+        if b is None:
+            return
+        b.remove_derived()
+        self._refresh_item_list()
+        self._refresh_preview()
+
     def _refresh_item_list(self) -> None:
         for w in self._item_list.winfo_children():
             w.destroy()

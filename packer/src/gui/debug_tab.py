@@ -1,8 +1,7 @@
-"""Debug tab — 调试源码 / 调试运行（全中文 UI）。
+"""Debug tab — 调试运行（全中文 UI）。
 
-- 调试源码：编译系统 API 判定支持（debug_source_command），注入
-  DGHUB_MANIFEST_DIR=插件根/.dghub-sdk 后运行源码（uv run）
-- 调试运行：Packer 构建（始终 folder + 固定输出 plugin_dir/debug/），
+- 调试运行：Packer 构建（始终 folder + 固定输出 plugin_dir/debug/，
+  增量缓存：PyInstaller Analysis / tsc tsbuildinfo / npm lock），
   在产物文件夹内运行插件入口
 - 环境变量区：主机 / 端口 / 令牌，支持本机 DGHub 探测自动填充与手动填写
 - 插件 stdout/stderr 统一进日志 tab（logbus external）；本页仅状态行
@@ -20,7 +19,7 @@ from backend.build_control import Canceller
 from backend.compilers import get_compiler
 from backend.debug_runner import (build_for_debug, detect_dghub,
                                   fetch_token, locate_debug_entry,
-                                  run_process)
+                                  resolve_run_command, run_process)
 from backend.builder import Builder
 from backend.logbus import Logger
 from backend.pipeline import BuildContext
@@ -29,12 +28,9 @@ from backend.project_manager import ProjectManager
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
 
-# 调试模式选项：显示名 → 键
-_MODE_CHOICES = (("调试源码", "source"), ("调试运行", "run"))
-
 
 class DebugTab(ctk.CTkFrame):
-    """调试页：模式选择 + 环境变量 + 启动/停止 + 状态行。"""
+    """调试页：检测 DGHub + 启动/停止 + 状态行。"""
 
     def __init__(self, master: Any, logger: Logger,
                  on_state_change: Any | None = None,
@@ -50,7 +46,6 @@ class DebugTab(ctk.CTkFrame):
         self._canceller: Canceller | None = None
 
         # 状态变量
-        self._mode_var = ctk.StringVar(value="调试源码")
         self._token_var = ctk.StringVar(
             value=os.environ.get("DGHUB_TOKEN", ""))
 
@@ -74,29 +69,23 @@ class DebugTab(ctk.CTkFrame):
     def _build_ui(self) -> None:
         self.grid_columnconfigure(1, weight=1)
 
-        # ---- row 0: 调试模式 + 检测 DGHub ----
+        # ---- row 0: 检测 DGHub ----
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.grid(row=0, column=0, columnspan=2, sticky="ew",
                  padx=10, pady=(10, 0))
         row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(row, text="调试模式", width=_LABEL_W, anchor="w",
+        ctk.CTkLabel(row, text="调试", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, padx=(0, 5), sticky="w")
-        mode_row = ctk.CTkFrame(row, fg_color="transparent")
-        mode_row.grid(row=0, column=1, sticky="w", padx=5)
-        self._mode_menu = ctk.CTkOptionMenu(
-            mode_row, width=220,
-            values=[label for label, _ in _MODE_CHOICES],
-            command=self._on_mode_changed)
-        self._mode_menu.pack(side="left")
-        self._controls.append(self._mode_menu)
+        detect_row = ctk.CTkFrame(row, fg_color="transparent")
+        detect_row.grid(row=0, column=1, sticky="w", padx=5)
         self._detect_btn = ctk.CTkButton(
-            mode_row, text="检测 DGHub", width=110,
+            detect_row, text="检测 DGHub", width=110,
             command=self._detect_clicked)
-        self._detect_btn.pack(side="left", padx=(10, 0))
+        self._detect_btn.pack(side="left")
         self._controls.append(self._detect_btn)
         self._detect_hint = ctk.CTkLabel(
-            mode_row, text="", font=ctk.CTkFont(size=11),
+            detect_row, text="", font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"), anchor="w")
         self._detect_hint.pack(side="left", padx=(8, 0))
 
@@ -137,23 +126,14 @@ class DebugTab(ctk.CTkFrame):
     # 状态与提示
     # ------------------------------------------------------------------
 
-    def _on_mode_changed(self, _label: str) -> None:
-        self._mode_var.set(_label)
-        self._update_hint()
-
     def _update_hint(self) -> None:
-        """按模式与编译系统刷新说明/不匹配提示（入口问题在调试时才检测）。"""
-        if self._mode_var.get() == "调试运行":
-            self._hint_lbl.configure(
-                text="构建后运行，位于 插件目录/debug/ 下",
-                text_color=("gray40", "gray60"))
-            return
+        """编译系统校验提示（构建与运行细节在调试时展示）。"""
         comp = self._current_compiler()
         if comp is None:
             self._hint_lbl.configure(
                 text="请先在编译页选择编译系统", text_color=("gray40", "gray60"))
             return
-        # 清单格式与编译系统匹配性检查（优先级最高）
+        # 清单格式与编译系统匹配性检查
         manifest = ""
         if self._pm:
             manifest = self._pm.read_project().get("compiler", {}).get("manifest", "") or ""
@@ -163,22 +143,10 @@ class DebugTab(ctk.CTkFrame):
                 text=f"清单格式与编译系统不匹配，{comp.label} 需要 {need}",
                 text_color=("#C0504D", "#E57373"))
             return
-        # 入口问题检查（调试前检测，优先级低于不匹配）
-        if comp.debug_source_command(Path(self._plugin_dir or ".")) is None:
-            if comp.id == "python":
-                text = "pyproject.toml 缺少 [tool.dghub].entry，无法调试源码"
-            elif comp.id == "node":
-                text = "插件目录缺少 package.json，无法调试源码"
-            else:
-                text = f"编译系统 '{comp.label}' 不支持「调试源码」"
-            self._hint_lbl.configure(
-                text=text, text_color=("#C0504D", "#E57373"))
-            return
-        # 正常提示：按编译区分入口来源
-        entry_src = ("package.json main 入口" if comp.id == "node"
-                     else "[tool.dghub].entry 源码")
+        # 正常提示：构建后运行
         self._hint_lbl.configure(
-            text=f"运行 {entry_src}，注入 .dghub-sdk manifest",
+            text="构建后运行，位于 插件目录/debug/ 下（增量缓存："
+                 "PyInstaller Analysis / tsc tsbuildinfo / npm lock）",
             text_color=("gray40", "gray60"))
 
     def _current_compiler(self):
@@ -274,7 +242,8 @@ class DebugTab(ctk.CTkFrame):
         if compile_system == "python":
             compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
         elif compile_system == "node":
-            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
+            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", ""),
+                           "bundle": project.get("compiler", {}).get("bundle", "exe")}
         elif compile_system == "command":
             compile_cfg = {"command": project.get("compiler", {}).get("command", ""),
                            "compile_dir": project.get("compiler", {}).get("compile_dir", "")}
@@ -296,55 +265,29 @@ class DebugTab(ctk.CTkFrame):
         )
 
     def _run(self) -> None:
-        plugin_dir = Path(self._plugin_dir or ".")
         canceller = Canceller()
         self._canceller = canceller
         env = self._build_env()
         rc = -1
         try:
-            if self._mode_var.get() == "调试源码":
-                comp = self._current_compiler()
-                if comp is None:
-                    self._logger.error("请先在编译页选择编译系统")
-                    return
-                cmd = comp.debug_source_command(plugin_dir)
-                if cmd is None:
-                    if comp.id == "python":
-                        self._logger.error(
-                            "pyproject.toml 缺少 [tool.dghub].entry，"
-                            "无法调试源码")
-                    elif comp.id == "node":
-                        self._logger.error(
-                            "插件目录缺少 package.json，无法调试源码")
-                    else:
-                        self._logger.error(
-                            f"编译系统 '{comp.label}' 不支持「调试源码」")
-                    return
-                # SDK 预留通道：源码调试的 manifest 来自 .dghub-sdk
-                env["DGHUB_MANIFEST_DIR"] = str(plugin_dir / ".dghub-sdk")
-                self._logger.info(
-                    f"调试源码（{comp.label}）: {' '.join(cmd)}")
-                self.after(0, lambda: self._set_status(
-                    "运行中", ("#2E7D32", "#4CAF50")))
-                rc = run_process(cmd, plugin_dir, env, self._logger,
-                                 "调试源码", canceller)
-            else:  # 调试运行：先构建（状态「构建中」），再运行（状态「运行中」）
-                ctx = self._make_debug_ctx(canceller)
-                self._logger.info("调试构建（文件夹输出到 插件目录/debug/）...")
-                self.after(0, lambda: self._set_status(
-                    "构建中...", ("#B8860B", "#E6B84B")))
-                artifact = build_for_debug(ctx, self._pm.read_manifest())
-                if artifact is None:
-                    return
-                entry = locate_debug_entry(ctx, artifact)
-                if entry is None:
-                    self._logger.error(f"未找到调试入口: {artifact}")
-                    return
-                self._logger.info(f"运行产物: {entry}")
-                self.after(0, lambda: self._set_status(
-                    "运行中", ("#2E7D32", "#4CAF50")))
-                rc = run_process([str(entry)], artifact, env, self._logger,
-                                 "调试运行", canceller)
+            # 调试运行：先构建（增量缓存），再运行产物（构建过程与目标
+            # 结构是调试对象本身——deps 模式同样需要 npm install + tsc）
+            ctx = self._make_debug_ctx(canceller)
+            self._logger.info("调试构建（文件夹输出到 插件目录/debug/）...")
+            self.after(0, lambda: self._set_status(
+                "构建中...", ("#B8860B", "#E6B84B")))
+            artifact = build_for_debug(ctx, self._pm.read_manifest())
+            if artifact is None:
+                return
+            entry = locate_debug_entry(ctx, artifact)
+            if entry is None:
+                self._logger.error(f"未找到调试入口: {artifact}")
+                return
+            self._logger.info(f"运行产物: {entry}")
+            self.after(0, lambda: self._set_status(
+                "运行中", ("#2E7D32", "#4CAF50")))
+            rc = run_process(resolve_run_command(entry), artifact,
+                             env, self._logger, "调试运行", canceller)
             self._logger.info(f"调试进程退出码: {rc}")
         finally:
             self._canceller = None

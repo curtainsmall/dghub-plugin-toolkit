@@ -80,20 +80,32 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
                 applied.append(f"{key} = {value}")
             ctx.pm.set_field("compiler", section)
 
-    # 2) deduce：建议编译产物条目（只填空——已存在 entry 条目不重复添加）
+    # 2) deduce：建议编译产物条目（合并去重——已存在条目不重复添加；
+    #    entry 已存在（手动配置）时尊重现状，不重复推断入口，
+    #    但缺失的编译产物目录（node_modules / dist / _internal）照常补全）
     items = ctx.builder.items()
     has_entry = any("entry" in it.tags for it in items)
-    deduced = comp.deduce(ctx.compile_cfg, ctx.plugin_name, ctx.source_dir)
-    if deduced and not has_entry:
-        for item in deduced:
-            if item.path is not None:
-                ctx.builder.add_file(item.path, item.tags,
-                                     derived=item.derived)
-                applied.append(f"添加打包内容: {item.path}（入口）")
-            elif item.dir is not None:
-                ctx.builder.add_dir(item.dir, item.tags,
-                                    derived=item.derived)
-                applied.append(f"添加打包内容: {item.dir}（编译产物）")
+    existing: set[tuple[str, str]] = set()
+    for it in items:
+        if it.path is not None:
+            existing.add(("path", it.path))
+        elif it.dir is not None:
+            existing.add(("dir", it.dir))
+    deduced = comp.deduce(ctx.compile_cfg, ctx.plugin_name, ctx.source_dir) or []
+    for item in deduced:
+        if "entry" in item.tags and has_entry:
+            continue
+        key = ("path", item.path) if item.path is not None else ("dir", item.dir)
+        if key in existing:
+            continue
+        if item.path is not None:
+            ctx.builder.add_file(item.path, item.tags,
+                                 derived=item.derived)
+            applied.append(f"添加打包内容: {item.path}（入口）")
+        elif item.dir is not None:
+            ctx.builder.add_dir(item.dir, item.tags,
+                                derived=item.derived)
+            applied.append(f"添加打包内容: {item.dir}（编译产物）")
 
     return applied
 

@@ -202,8 +202,15 @@ class App(ctk.CTk):
             btn.pack_forget()
 
     def _on_compile_changed(self) -> None:
-        """编译设置变更（CompileTab 回调）。"""
+        """编译设置变更（CompileTab 回调）。
+
+        编译系统/产物模式变化后旧 deduce 产物条目失效——清除 build_tab
+        的 derived 条目，用户需重新按「从编译填充」。
+        """
         self._debug_view._update_hint()
+        view = getattr(self, "_dist_view", None)
+        if view is not None:
+            view.clear_derived()
 
     # ------------------------------------------------------------------
     # bottom bar

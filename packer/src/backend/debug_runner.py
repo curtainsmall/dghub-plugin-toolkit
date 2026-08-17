@@ -44,6 +44,19 @@ def fetch_token(host: str = _DEFAULT_HOST, port: int = _DEFAULT_PORT,
         return None
 
 
+def resolve_run_command(entry: Path) -> list[str]:
+    """产物入口 → 可执行命令。
+
+    ``.py`` 入口（依赖版 start_node.py 等）Windows 无法直接 CreateProcess，
+    须经 Python 解释器执行（py_compiler._get_python_exe：源码态当前解释器 /
+    冻结态系统 Python）；其余（exe）直接执行。
+    """
+    if str(entry).lower().endswith(".py"):
+        from backend.py_compiler import _get_python_exe
+        return [*_get_python_exe(), str(entry)]
+    return [str(entry)]
+
+
 def run_process(cmd: list[str], cwd: Path, env: dict, logger: Logger,
                 source: str,
                 canceller: Canceller | None = None) -> int:

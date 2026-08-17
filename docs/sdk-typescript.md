@@ -213,7 +213,7 @@ Packer 的 Node.js 编译系统（Node.js (npm + SEA)）按 **`package.json` +
 ### 入口声明
 
 插件入口由 `package.json` 的 `main` 字段声明（缺省 `index.js`）。
-该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时不需要：
+该声明仅供 Packer 使用（构建与调试时读取），SDK 运行时不需要：
 
 ```json
 { "main": "dist/main.js" }

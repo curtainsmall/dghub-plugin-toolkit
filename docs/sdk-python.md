@@ -194,7 +194,7 @@ Packer 的 Python 编译系统（Python (uv + PyInstaller)）只从
 ### 入口声明
 
 插件入口由 `pyproject.toml` 的 `[tool.dghub].entry` 声明（相对清单文件
-所在目录）。该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时
+所在目录）。该声明仅供 Packer 使用（构建与调试时读取），SDK 运行时
 不需要：
 
 ```toml

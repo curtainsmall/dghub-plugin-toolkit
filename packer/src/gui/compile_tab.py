@@ -92,11 +92,6 @@ class CompileTab(ctk.CTkFrame):
         self._none_frame = ctk.CTkFrame(self, fg_color="transparent")
         self._none_frame.grid(row=1, column=0, columnspan=2, sticky="ew",
                               padx=10, pady=(10, 0))
-        ctk.CTkLabel(
-            self._none_frame, text="不执行编译：直接收集打包内容（构建页配置）",
-            font=ctk.CTkFont(size=13), text_color=("gray40", "gray60"),
-            anchor="w", wraplength=700, justify="left").pack(
-            anchor="w", padx=4, pady=8)
 
         # ---- Python 设置区（compile_system="python" 时显示）----
         self._py_frame = ctk.CTkFrame(self, fg_color="transparent")

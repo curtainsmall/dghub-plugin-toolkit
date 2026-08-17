@@ -129,14 +129,6 @@ class Compiler:
         """
         return None
 
-    def debug_source_command(self, plugin_dir: Path) -> list[str] | None:
-        """「调试源码」启动命令；不支持返回 None。
-
-        返回的命令由调试页在插件根目录启动（cwd=plugin_dir），
-        结果 = 子进程退出码（stdout/stderr 进日志 tab）。
-        """
-        return None
-
 
     def run(self, ctx: CompilerContext) -> bool:
         """执行阶段 1 工作，产出文件；失败返回 False。"""
@@ -277,13 +269,6 @@ class PythonCompiler(Compiler):
 
     def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:
         return output_dir / ".pyi" / plugin_name
-
-    def debug_source_command(self, plugin_dir: Path) -> list[str] | None:
-        """uv run --project 运行 [tool.dghub].entry 源码；entry 缺失返回 None。"""
-        entry = read_tool_dghub_entry(plugin_dir / "pyproject.toml")
-        if not entry:
-            return None
-        return ["uv", "run", "--project", str(plugin_dir), entry]
 
 
     def run(self, ctx: CompilerContext) -> bool:
@@ -521,13 +506,6 @@ class NodeCompiler(Compiler):
                 items.append(BuilderItem(path=entry, derived=True))
         return items
 
-    def debug_source_command(self, plugin_dir: Path) -> list[str] | None:
-        """node 运行 package.json main 入口；入口缺失返回 None。"""
-        entry = read_package_json_main(plugin_dir / "package.json")
-        if not entry:
-            return None
-        return ["node", entry]
-
     def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:
         return output_dir / ".node" / plugin_name
 
@@ -673,6 +651,7 @@ class NoneCompiler(Compiler):
 
     id = ""
     label = "无"
+    description = "不执行 compile，直接收集打包内容（构建页配置）"
 
     def run(self, ctx: CompilerContext) -> bool:
         return True  # 无阶段 1 工作，直接进入收集
