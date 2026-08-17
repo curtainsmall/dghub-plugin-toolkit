@@ -391,6 +391,31 @@ import(pathToFileURL(path.join(__dirname, "{entry}")).href)
 # postject 注入哨兵（官方固定值）
 _SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2"
 
+# 依赖版启动器（bundle=deps）：DGHub 以 .py 入口执行本脚本（宿主自带 Python
+# 运行时），拉起系统 Node 运行插件入口。环境变量（DGHUB_TOKEN 等）由子进程继承。
+_NODE_LAUNCHER = '''\
+"""Node 插件启动器（依赖版产物，由 Packer 生成）。
+
+DGHub 以 .py 入口执行本脚本（宿主自带 Python 运行时），拉起系统 Node
+运行插件入口；环境变量（DGHUB_TOKEN 等）由子进程继承。
+"""
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+node = shutil.which("node")
+if node is None:
+    sys.exit("未找到 node，请安装 Node.js（依赖版产物需要系统 Node 运行时）")
+
+entry = Path(__file__).resolve().parent / "{entry}"
+proc = subprocess.Popen(
+    [node, str(entry)],
+    creationflags=0x08000000,  # CREATE_NO_WINDOW：无控制台窗口
+)
+sys.exit(proc.wait())
+'''
+
 
 def _node_tool(name: str) -> list[str]:
     """解析 npm/npx 可执行路径（Windows 下为 .cmd，需经 cmd.exe 执行）。"""
@@ -415,6 +440,12 @@ class NodeCompiler(Compiler):
     fields = {
         "manifest": {"label": "依赖清单", "type": "str",
                      "default": "", "required": True},
+        "bundle": {"label": "产物模式", "type": "str",
+                   "default": "exe", "required": False,
+                   "choices": [
+                       ("exe", "自包含（SEA exe，目标机无需 Node）"),
+                       ("deps", "依赖版（源码 + node_modules + 启动脚本，需系统 Node）"),
+                   ]},
     }
 
     def enabled(self, cfg: dict[str, Any]) -> bool:
@@ -443,6 +474,9 @@ class NodeCompiler(Compiler):
     def validate(self, cfg: dict[str, Any],
                  source_dir: Path) -> list[str]:
         errors = super().validate(cfg, source_dir)
+        bundle = cfg.get("bundle", "exe")
+        if bundle not in ("exe", "deps"):
+            errors.append(f"未知产物模式: {bundle}（exe / deps）")
         manifest = cfg.get("manifest", "")
         if manifest and not self.is_known_manifest(Path(manifest).name):
             errors.append(f"无法识别的依赖清单: {Path(manifest).name}"
@@ -461,14 +495,21 @@ class NodeCompiler(Compiler):
     def deduce(self, cfg: dict[str, Any],
                 plugin_name: str = "",
                 source_dir: Path | None = None) -> list[BuilderItem] | None:
-        """manifest 已选 → 推导产物条目：SEA exe + node_modules + 入口目录。"""
+        """manifest 已选 → 推导产物条目。
+
+        bundle=exe（默认）：SEA exe + node_modules + 入口目录；
+        bundle=deps：启动脚本 start_node.py（.py 入口）+ node_modules + 入口目录。
+        """
         if not cfg.get("manifest") or not plugin_name:
             return None
-        items: list[BuilderItem] = [
-            BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
-                        derived=True),
-            BuilderItem(dir="node_modules", derived=True),
-        ]
+        items: list[BuilderItem] = []
+        if cfg.get("bundle") == "deps":
+            items.append(BuilderItem(path="start_node.py", tags=["entry"],
+                                     derived=True))
+        else:
+            items.append(BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
+                                     derived=True))
+        items.append(BuilderItem(dir="node_modules", derived=True))
         # 入口所在目录（dist / src …）随产物收集；入口在根则只收入口文件
         if source_dir is not None:
             entry = read_package_json_main(
@@ -543,47 +584,58 @@ class NodeCompiler(Compiler):
                 ctx.log.error("TS 编译失败")
                 return False
 
-        # 3) 生成 SEA 引导器 + sea-config（临时文件，构建后清理）
-        bootstrap = ctx.source_dir / "sea-bootstrap.cjs"
-        bootstrap.write_text(
-            _SEA_BOOTSTRAP.replace("{entry}",
-                                   entry.replace(chr(92), "/")),
-            encoding="utf-8")
-        sea_config = ctx.source_dir / "sea-config.packer.json"
-        sea_config.write_text(json.dumps({
-            "main": "sea-bootstrap.cjs",
-            "output": "sea-prep.blob",
-        }), encoding="utf-8")
-
-        # 4) SEA 三件套：快照 → 复制 node.exe → postject 注入
+        # 3) 产物模式：exe（SEA）或 deps（依赖版）
         prod_dir = ctx.output_dir / ".node" / ctx.plugin_name
         prod_dir.mkdir(parents=True, exist_ok=True)
-        exe_path = prod_dir / f"{ctx.plugin_name}.exe"
-        try:
-            ok = run_logged(
-                ["node", "--experimental-sea-config", "sea-config.packer.json"],
-                ctx.log, "SEA", cwd=ctx.source_dir,
-                canceller=ctx.canceller)
-            if not ok:
-                return False
-            node_exe = shutil.which("node")
-            if not node_exe:
-                ctx.log.error("未找到 node.exe")
-                return False
-            shutil.copy2(node_exe, exe_path)
-            ctx.log.info("注入 SEA 引导器...")
-            ok = run_logged(
-                [*_node_tool("npx"), "--yes", "postject",
-                 str(exe_path), "NODE_SEA_BLOB", "sea-prep.blob",
-                 "--sentinel-fuse", _SEA_FUSE],
-                ctx.log, "postject", cwd=ctx.source_dir,
-                canceller=ctx.canceller)
-            if not ok:
-                return False
-        finally:
-            bootstrap.unlink(missing_ok=True)
-            sea_config.unlink(missing_ok=True)
-            (ctx.source_dir / "sea-prep.blob").unlink(missing_ok=True)
+        if ctx.cfg.get("bundle") == "deps":
+            # 依赖版：跳过 SEA，生成 .py 启动脚本作 entry（宿主以 .py 入口
+            # 执行，用自带 Python 运行时拉起系统 Node）
+            launcher = prod_dir / "start_node.py"
+            launcher.write_text(
+                _NODE_LAUNCHER.replace("{entry}",
+                                       entry.replace(chr(92), "/")),
+                encoding="utf-8")
+            ctx.log.info("依赖版产物：生成 start_node.py 启动脚本"
+                         "（需目标机安装 Node.js）")
+        else:
+            # 4) 自包含：SEA 三件套（快照 → 复制 node.exe → postject 注入）
+            bootstrap = ctx.source_dir / "sea-bootstrap.cjs"
+            bootstrap.write_text(
+                _SEA_BOOTSTRAP.replace("{entry}",
+                                       entry.replace(chr(92), "/")),
+                encoding="utf-8")
+            sea_config = ctx.source_dir / "sea-config.packer.json"
+            sea_config.write_text(json.dumps({
+                "main": "sea-bootstrap.cjs",
+                "output": "sea-prep.blob",
+            }), encoding="utf-8")
+            exe_path = prod_dir / f"{ctx.plugin_name}.exe"
+            try:
+                ok = run_logged(
+                    ["node", "--experimental-sea-config",
+                     "sea-config.packer.json"],
+                    ctx.log, "SEA", cwd=ctx.source_dir,
+                    canceller=ctx.canceller)
+                if not ok:
+                    return False
+                node_exe = shutil.which("node")
+                if not node_exe:
+                    ctx.log.error("未找到 node.exe")
+                    return False
+                shutil.copy2(node_exe, exe_path)
+                ctx.log.info("注入 SEA 引导器...")
+                ok = run_logged(
+                    [*_node_tool("npx"), "--yes", "postject",
+                     str(exe_path), "NODE_SEA_BLOB", "sea-prep.blob",
+                     "--sentinel-fuse", _SEA_FUSE],
+                    ctx.log, "postject", cwd=ctx.source_dir,
+                    canceller=ctx.canceller)
+                if not ok:
+                    return False
+            finally:
+                bootstrap.unlink(missing_ok=True)
+                sea_config.unlink(missing_ok=True)
+                (ctx.source_dir / "sea-prep.blob").unlink(missing_ok=True)
 
         # 5) 收集产物：node_modules + 入口目录 → prod_dir
         node_modules = ctx.source_dir / "node_modules"
@@ -604,7 +656,7 @@ class NodeCompiler(Compiler):
         # 6) 清理：构建期间生成的 package-lock.json（若原本不存在）
         if not lock_existed:
             (ctx.source_dir / "package-lock.json").unlink(missing_ok=True)
-        ctx.log.info("exe 构建完成")
+        ctx.log.info(f"构建完成（{'exe' if ctx.cfg.get('bundle') != 'deps' else 'deps'}）")
         return True
 
 

@@ -1,8 +1,61 @@
 """GUI 共享组件：跨 tab 复用的小部件与样式辅助（消除重复定义）。"""
 
+import ctypes
+import sys
+import tkinter.font as tkfont
+from pathlib import Path
 from typing import Any
 
 import customtkinter as ctk
+
+# Font Awesome 6 Free（SIL OFL 1.1），随 Packer 分发：
+# 冻结态 _MEIPASS/fontawesome/，源码态包内 assets/fontawesome/
+_FA_FILENAME = "fa-solid-900.ttf"
+_ICON_FAMILY: str | None | bool = False   # False = 尚未探测
+
+
+def _fa_path() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "fontawesome" / _FA_FILENAME
+    return (Path(__file__).resolve().parent
+            / "assets" / "fontawesome" / _FA_FILENAME)
+
+
+def load_icon_font() -> str | None:
+    """加载 Font Awesome 图标字体，返回可用 family 名；失败返回 None。
+
+    Windows：AddFontResourceExW 私有注册（FR_PRIVATE，不污染系统）；
+    其他平台依赖系统已安装的 Font Awesome。结果进程内缓存。
+    """
+    global _ICON_FAMILY
+    if _ICON_FAMILY is not False:
+        return _ICON_FAMILY
+    # 系统已装 Font Awesome（Linux/macOS 常见）→ 直接用
+    for family in tkfont.families():
+        if "Font Awesome" in family:
+            _ICON_FAMILY = family
+            return family
+    path = _fa_path()
+    if path.is_file() and sys.platform == "win32":
+        try:
+            # FR_PRIVATE = 0x10：仅本进程可见，进程退出自动卸载
+            if ctypes.windll.gdi32.AddFontResourceExW(str(path), 0x10, 0) != 0:
+                for family in tkfont.families():
+                    if "Font Awesome" in family:
+                        _ICON_FAMILY = family
+                        return family
+        except Exception:
+            pass
+    _ICON_FAMILY = None
+    return None
+
+
+def icon_font(size: int = 14) -> ctk.CTkFont:
+    """返回 Font Awesome 图标字体；字体不可用时回退默认字体。"""
+    family = load_icon_font()
+    if family:
+        return ctk.CTkFont(family=family, size=size)
+    return ctk.CTkFont(size=size)
 
 
 class ToolTip:
@@ -12,8 +65,15 @@ class ToolTip:
         self._widget = widget
         self._text = text
         self._tip: Any | None = None
+        self._label: Any | None = None
         widget.bind("<Enter>", self._show)
         widget.bind("<Leave>", self._hide)
+
+    def set_text(self, text: str) -> None:
+        """更新提示文本；气泡正在显示时即时刷新。"""
+        self._text = text
+        if self._tip is not None and self._label is not None:
+            self._label.configure(text=text)
 
     def _show(self, _event: Any = None) -> None:
         if self._tip is not None:
@@ -24,13 +84,16 @@ class ToolTip:
         self._tip = tk.Toplevel(self._widget)
         self._tip.wm_overrideredirect(True)
         self._tip.wm_geometry(f"+{x}+{y}")
-        tk.Label(self._tip, text=self._text, background="#333333",
-                 foreground="white", padx=6, pady=2).pack()
+        self._label = tk.Label(self._tip, text=self._text, background="#333333",
+                               foreground="white", padx=6, pady=2,
+                               justify="left")
+        self._label.pack()
 
     def _hide(self, _event: Any = None) -> None:
         if self._tip is not None:
             self._tip.destroy()
             self._tip = None
+            self._label = None
 
 
 def reset_entry_border(entry: ctk.CTkEntry) -> None:

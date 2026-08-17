@@ -17,7 +17,7 @@ from backend.py_compiler import _get_python_exe
 from backend.compilers import COMPILERS, COMPILER_CHOICES, get_compiler
 from backend.project_manager import ProjectManager
 from backend.winflags import _NO_WINDOW
-from gui.widgets import ToolTip
+from gui.widgets import ToolTip, icon_font
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -40,6 +40,7 @@ class CompileTab(ctk.CTkFrame):
         # 状态变量
         self._compile_system_var = ctk.StringVar(value="")
         self._manifest_var = ctk.StringVar(value="")
+        self._bundle_var = ctk.StringVar(value="exe")   # Node 产物模式
         self._compile_var = ctk.StringVar(value="")   # 编译命令字符串
         self._compile_dir = ""  # 执行目录（绝对路径；空 = 项目根）
 
@@ -72,16 +73,20 @@ class CompileTab(ctk.CTkFrame):
         ctk.CTkLabel(row, text="编译系统", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, padx=(0, 5), sticky="w")
+        selector_row = ctk.CTkFrame(row, fg_color="transparent")
+        selector_row.grid(row=0, column=1, sticky="w", padx=5)
         self._proc_menu = ctk.CTkOptionMenu(
-            row, width=220, values=[label for _, label in COMPILER_CHOICES],
+            selector_row, width=220,
+            values=[label for _, label in COMPILER_CHOICES],
             command=self._on_compile_changed)
-        self._proc_menu.grid(row=0, column=1, sticky="w", padx=5)
+        self._proc_menu.pack(side="left")
+        self._proc_hint_icon = ctk.CTkLabel(
+            selector_row, text="\uf059", width=24,
+            font=icon_font(), cursor="question_arrow")
+        self._proc_hint_icon.pack(side="left", padx=(6, 0))
         self._controls.append(self._proc_menu)
-        self._proc_hint = ctk.CTkLabel(
-            row, text="", font=ctk.CTkFont(size=11),
-            text_color=("gray40", "gray60"), anchor="w", wraplength=600,
-            justify="left")
-        self._proc_hint.grid(row=0, column=2, sticky="w", padx=(10, 0))
+        self._proc_hint_tip = ToolTip(self._proc_hint_icon,
+                                      self._compiler_hint_text())
 
         # ---- (None) 设置区（compile_system="" 时显示）----
         self._none_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -103,15 +108,45 @@ class CompileTab(ctk.CTkFrame):
         ctk.CTkLabel(self._py_frame, text="依赖清单", width=_LABEL_W,
                      anchor="w", font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, padx=(0, 5), sticky="w")
+        manifest_row = ctk.CTkFrame(self._py_frame, fg_color="transparent")
+        manifest_row.grid(row=0, column=1, sticky="w", padx=5, pady=4)
         self._manifest_label = ctk.CTkLabel(
-            self._py_frame, text="未选择", anchor="w",
-            fg_color=("gray85", "gray25"), corner_radius=6, width=1)
-        self._manifest_label.grid(row=0, column=1, sticky="ew", padx=5, pady=4)
+            manifest_row, text="未选择", anchor="w",
+            fg_color=("gray85", "gray25"), corner_radius=6, width=220)
+        self._manifest_label.pack(side="left", padx=(0, 5))
         self._manifest_btn = ctk.CTkButton(
-            self._py_frame, text="选择文件", width=90,
+            manifest_row, text="选择文件", width=90,
             command=self._pick_manifest)
-        self._manifest_btn.grid(row=0, column=2, padx=(5, 0))
+        self._manifest_btn.pack(side="left")
         self._controls.extend([self._manifest_label, self._manifest_btn])
+
+        # 产物模式（Node 专属：exe 自包含 / deps 依赖版）
+        self._bundle_frame = ctk.CTkFrame(self._py_frame, fg_color="transparent")
+        self._bundle_frame.grid(row=1, column=0, columnspan=3, sticky="ew",
+                                padx=(0, 0), pady=(8, 0))
+        self._bundle_frame.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self._bundle_frame, text="产物模式", width=_LABEL_W,
+                     anchor="w", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=0, padx=(0, 5), sticky="w")
+        bundle_row = ctk.CTkFrame(self._bundle_frame, fg_color="transparent")
+        bundle_row.grid(row=0, column=1, sticky="w", padx=5)
+        self._bundle_menu = ctk.CTkOptionMenu(
+            bundle_row, width=220, values=[
+                "自包含（exe）",
+                "依赖版（deps）"],
+            command=self._on_bundle_changed)
+        self._bundle_menu.pack(side="left")
+        self._bundle_hint_icon = ctk.CTkLabel(
+            bundle_row, text="\uf059", width=24,
+            font=icon_font(), cursor="question_arrow")
+        self._bundle_hint_icon.pack(side="left", padx=(6, 0))
+        self._controls.append(self._bundle_menu)
+        self._bundle_hint_tip = ToolTip(
+            self._bundle_hint_icon,
+            "自包含（exe）：打包 Node.js 运行时（SEA 注入），目标机无需安装 Node\n"
+            "依赖版（deps）：不打包运行时，目标机需安装 Node.js；"
+            "跳过 SEA 打包，无需 postject 等工具链")
+        self._bundle_frame.grid_remove()
 
 
         self._pyinstaller_hint = ctk.CTkLabel(
@@ -178,6 +213,16 @@ class CompileTab(ctk.CTkFrame):
                 return cid
         return ""
 
+    def _compiler_hint_text(self) -> str:
+        """编译系统 tooltip 静态文本：一次性说明全部选项（左对齐）。"""
+        lines: list[str] = []
+        for cid, label in COMPILER_CHOICES:
+            comp = COMPILERS.get(cid)
+            desc = (comp.description if comp
+                    else "不执行 compile，直接收集打包内容")
+            lines.append(f"{label}：{desc}")
+        return "\n".join(lines)
+
     def _on_compile_changed(self, label: str) -> None:
         if self._loading:
             return
@@ -216,19 +261,19 @@ class CompileTab(ctk.CTkFrame):
         self._cmd_frame.grid_remove()
         self._none_frame.grid_remove()
         if cid in ("python", "node"):
-            # Node 与 Python 共用依赖清单区；Node 隐藏 SDK 与预检行
+            # Node 与 Python 共用依赖清单区；Node 显示产物模式、隐藏预检行
             if cid == "node":
                 self._pyinstaller_hint.grid_remove()
+                self._bundle_frame.grid()
             else:
                 self._pyinstaller_hint.grid()
+                self._bundle_frame.grid_remove()
             self._py_frame.grid()
         elif cid == "command":
             self._cmd_frame.grid()
         else:
             self._none_frame.grid()
         comp = get_compiler(cid)
-        self._proc_hint.configure(
-            text=comp.description if comp else "不执行 compile，直接收集打包内容")
 
     def _update_exec_state(self) -> None:
         """执行目录行始终可用——Command 区可见即 command 编译模式。"""
@@ -262,6 +307,11 @@ class CompileTab(ctk.CTkFrame):
                 text=f"? {name} 未知清单", text_color=("#C0504D", "#E57373"))
         self._on_setting_changed()
         self._check_pyinstaller_bg()
+
+    def _on_bundle_changed(self, label: str) -> None:
+        """产物模式下拉变化 → 同步变量并保存。"""
+        self._bundle_var.set("deps" if "依赖版" in label else "exe")
+        self._on_setting_changed()
 
     def _pick_compile_dir(self) -> None:
         d = filedialog.askdirectory(title="选择编译命令执行目录")
@@ -340,6 +390,11 @@ class CompileTab(ctk.CTkFrame):
                              COMPILER_CHOICES[0][1])
                 self._proc_menu.set(label)
                 self._manifest_var.set(project.get("compiler", {}).get("manifest", ""))
+                bundle = project.get("compiler", {}).get("bundle", "exe")
+                self._bundle_var.set(bundle if bundle in ("exe", "deps") else "exe")
+                self._bundle_menu.set(
+                    "依赖版（deps）" if bundle == "deps"
+                    else "自包含（exe）")
                 self._compile_var.set(project.get("compiler", {}).get("command", ""))
                 rel_exec = project.get("compiler", {}).get("compile_dir", "")
                 self._compile_dir = (self._pm.to_absolute(rel_exec)
@@ -362,6 +417,7 @@ class CompileTab(ctk.CTkFrame):
         compiler = project["compiler"]
         compiler["compile_system"] = self._compile_id()
         compiler["manifest"] = self._manifest_var.get()
+        compiler["bundle"] = self._bundle_var.get()
         compiler["command"] = self._compile_var.get()
         compiler["compile_dir"] = (self._pm.to_relative(self._compile_dir)
                                  if self._compile_dir else "")
@@ -376,7 +432,8 @@ class CompileTab(ctk.CTkFrame):
         if cid == "python":
             return {"manifest": self._manifest_var.get()}
         if cid == "node":
-            return {"manifest": self._manifest_var.get()}
+            return {"manifest": self._manifest_var.get(),
+                    "bundle": self._bundle_var.get()}
         if cid == "command":
             return {"command": self._compile_var.get(),
                     "compile_dir": self._compile_dir}

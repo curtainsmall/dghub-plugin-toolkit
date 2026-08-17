@@ -222,7 +222,7 @@ Packer 的 Node.js 编译系统（Node.js (npm + SEA)）按 **`package.json` +
 TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存在——
 只要插件根目录有 `tsconfig.json`，Packer 即视为 TS 项目并放行。
 
-### 构建流程（Packer 自动执行，三步）
+### 构建流程（Packer 自动执行）
 
 1. **安装依赖**：`npm install --no-audit --no-fund`（在插件目录执行）
 2. **编译**（根目录存在 `tsconfig.json` 时）：
@@ -230,9 +230,14 @@ TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存
      <debug/cache>/tsbuildinfo.json`
    - 正式构建：`package.json` 有 `scripts.build` → 执行 `npm run build`；
      否则回退为直接执行 `npx tsc`
-3. **SEA 打包**（自动）：Packer 临时生成 `sea-bootstrap.cjs` 引导器与
-   `sea-config.packer.json` → `node --experimental-sea-config` 生成 blob →
-   复制 `node.exe` → `postject` 注入 → 清理临时文件
+3. **按产物模式打包**（编译页「产物模式」选项，默认自包含）：
+   - **自包含（exe）**：临时生成 `sea-bootstrap.cjs` 引导器与
+     `sea-config.packer.json` → `node --experimental-sea-config` 生成 blob →
+     复制 `node.exe` → `postject` 注入 → 清理临时文件
+   - **依赖版（deps）**：跳过 SEA，生成 `start_node.py` 启动脚本
+     （~1KB，entry 指向它）——DGHub 以 `.py` 入口执行脚本（宿主自带
+     Python 运行时），脚本拉起**系统 Node** 运行插件入口；目标机需
+     预装 Node.js（framework-dependent）
 
 ### 依赖管理：以 npm 为准
 
@@ -252,12 +257,26 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 
 `<输出目录>/.node/<插件名>/` 下（目录式分发——exe 与依赖同目录）：
 
+**自包含（exe，默认）**——目标机零安装：
+
 ```
 .node/<插件名>/
 ├── <插件名>.exe     # SEA 单文件运行时（含 Node.js + 引导器）
 ├── node_modules/    # 依赖（构建时 npm install 的全量拷贝）
 └── <入口目录>/      # 入口所在目录（入口在根则只收入口文件）
 ```
+
+**依赖版（deps）**——体积小，目标机需装 Node.js：
+
+```
+.node/<插件名>/
+├── start_node.py    # 启动脚本（.py 入口，Packer 生成）
+├── node_modules/    # 依赖（构建时 npm install 的全量拷贝）
+└── <入口目录>/      # 入口所在目录（入口在根则只收入口文件）
+```
+
+`manifest.entry` 相应为 `<插件名>.exe`（自包含）或 `start_node.py`
+（依赖版）——两者都是宿主已支持的 entry 类型。
 
 ### 插件作者须知
 

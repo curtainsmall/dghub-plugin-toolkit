@@ -1,4 +1,4 @@
-﻿# -*- mode: python ; coding: utf-8 -*-
+# -*- mode: python ; coding: utf-8 -*-
 """PyInstaller 构建配方：onedir + MERGE，GUI 与 CI CLI 共享一份运行时。
 
 产出单个文件夹 `dghub-sdk-packer/`，含两个启动器：
@@ -29,7 +29,11 @@ _GUI = [
 _CLI = ["cli.cli"]
 
 # SDK 作为数据随包（py_compiler._find_sdk_path 在冻结态读 _MEIPASS/dghub_sdk）
-_DATAS = [(str(SDK / "dghub_sdk"), "dghub_sdk")]
+# Font Awesome 图标字体随包（widgets.load_icon_font 冻结态读 _MEIPASS/fontawesome）
+_DATAS = [
+    (str(SDK / "dghub_sdk"), "dghub_sdk"),
+    (str(SRC / "gui" / "assets" / "fontawesome"), "fontawesome"),
+]
 _PATHEX = [str(SRC), str(SDK)]
 
 a_gui = Analysis(

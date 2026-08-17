@@ -172,6 +172,37 @@ def test_compiler_registry():
     assert none_comp.run(object()) is True  # 阶段 1 空操作
 
 
+def test_node_compiler_bundle_deduce(make_project):
+    """Node 产物模式：exe（默认）vs deps 推导不同 entry 条目。"""
+    node = get_compiler("node")
+    cfg = {"manifest": "package.json"}
+    # exe（默认）：SEA exe 作入口
+    assert [i.to_dict() for i in node.deduce(cfg, "my-plugin")] == [
+        {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
+        {"dir": "node_modules", "derived": True}]
+    # deps：start_node.py 作入口
+    assert [i.to_dict() for i in node.deduce(
+        {**cfg, "bundle": "deps"}, "my-plugin")] == [
+        {"path": "start_node.py", "tags": ["entry"], "derived": True},
+        {"dir": "node_modules", "derived": True}]
+
+
+def test_node_compiler_bundle_validate(make_project):
+    """bundle 值校验：exe/deps 合法，未知值报错。"""
+    pm, _, plugin_dir = make_project()
+    (plugin_dir / "package.json").write_text(
+        json.dumps({"main": "main.js"}))
+    (plugin_dir / "main.js").write_text("x")
+    node = get_compiler("node")
+    assert node.validate({"manifest": "package.json",
+                          "bundle": "exe"}, plugin_dir) == []
+    assert node.validate({"manifest": "package.json",
+                          "bundle": "deps"}, plugin_dir) == []
+    assert any("产物模式" in e
+               for e in node.validate({"manifest": "package.json",
+                                       "bundle": "fat"}, plugin_dir))
+
+
 # ---------------------------------------------------------------------------
 # pipeline：validate / fill / run_build
 # ---------------------------------------------------------------------------
