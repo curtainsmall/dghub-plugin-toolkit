@@ -43,7 +43,7 @@ class CompilerContext:
 
 
 def run_logged(cmd: Any, logger: Logger, source: str,
-               cwd: str | None = None, shell: bool = False,
+               cwd: str | os.PathLike[str] | None = None, shell: bool = False,
                timeout: int = 900,
                env: dict | None = None,
                canceller: Canceller | None = None) -> bool:
@@ -549,7 +549,7 @@ class NodeCompiler(Compiler):
             _SEA_BOOTSTRAP.replace("{entry}",
                                    entry.replace(chr(92), "/")),
             encoding="utf-8")
-        sea_config = ctx.source_dir / "sea-config.json"
+        sea_config = ctx.source_dir / "sea-config.packer.json"
         sea_config.write_text(json.dumps({
             "main": "sea-bootstrap.cjs",
             "output": "sea-prep.blob",
@@ -561,7 +561,7 @@ class NodeCompiler(Compiler):
         exe_path = prod_dir / f"{ctx.plugin_name}.exe"
         try:
             ok = run_logged(
-                ["node", "--experimental-sea-config", "sea-config.json"],
+                ["node", "--experimental-sea-config", "sea-config.packer.json"],
                 ctx.log, "SEA", cwd=ctx.source_dir,
                 canceller=ctx.canceller)
             if not ok:

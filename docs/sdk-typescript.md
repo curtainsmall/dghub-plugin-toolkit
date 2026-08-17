@@ -15,7 +15,7 @@
 - [错误处理](#错误处理)
 - [手动接入（调试）](#手动接入调试)
 - [构建与测试](#构建与测试)
-- [附录：插件入口声明](#附录插件入口声明)
+- [附录：Packer 如何读取 Node.js 项目结构](#附录packer-如何读取-nodejs-项目结构)
 
 ---
 
@@ -204,13 +204,73 @@ npm run build     # tsc 编译到 dist/
 npm test          # node:test 单元测试
 ```
 
-## 附录：插件入口声明
+## 附录：Packer 如何读取 Node.js 项目结构
 
-TypeScript 插件入口由 `package.json` 的 `main` 字段声明。该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时不需要：
+Packer 的 Node.js 编译系统（Node.js (npm + SEA)）按 **`package.json` +
+根目录 `tsconfig.json`** 的生态约定读取项目，**无需任何额外配置文件**
+（不需要 `sea-config.json` 或 `tsconfig.build.json`）。
+
+### 入口声明
+
+插件入口由 `package.json` 的 `main` 字段声明（缺省 `index.js`）。
+该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时不需要：
 
 ```json
 { "main": "dist/main.js" }
 ```
+
+TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存在——
+只要插件根目录有 `tsconfig.json`，Packer 即视为 TS 项目并放行。
+
+### 构建流程（Packer 自动执行，三步）
+
+1. **安装依赖**：`npm install --no-audit --no-fund`（在插件目录执行）
+2. **编译**（根目录存在 `tsconfig.json` 时）：
+   - 调试构建：`npx tsc --incremental --tsBuildInfoFile
+     <debug/cache>/tsbuildinfo.json`
+   - 正式构建：`package.json` 有 `scripts.build` → 执行 `npm run build`；
+     否则回退为直接执行 `npx tsc`
+3. **SEA 打包**（自动）：Packer 临时生成 `sea-bootstrap.cjs` 引导器与
+   `sea-config.packer.json` → `node --experimental-sea-config` 生成 blob →
+   复制 `node.exe` → `postject` 注入 → 清理临时文件
+
+### 依赖管理：以 npm 为准
+
+Packer 构建一律执行 `npm install`，不感知 yarn / pnpm：
+
+- **锁文件**：只认 `package-lock.json`；项目存在 `yarn.lock` /
+  `pnpm-lock.yaml` 时会被忽略，npm 按 `package.json` 重新解析——构建
+  依赖树可能与本地开发（yarn / pnpm）不一致
+- **特有语义**：yarn / pnpm workspace（`workspace:*`）、`resolutions` /
+  `overrides` 等字段 npm 不识别——workspace 项目无法安装，依赖覆盖不生效
+- 本地开发用 yarn / pnpm 没有问题，但**发布构建的依赖以 npm 解析结果为准**，
+  建议按 npm 语义验证后再发布
+
+Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.yaml`；
+构建自产的 `package-lock.json` 若原本不存在，构建后自动清理。
+
+### 产物布局
+
+`<输出目录>/.node/<插件名>/` 下（目录式分发——exe 与依赖同目录）：
+
+```
+.node/<插件名>/
+├── <插件名>.exe     # SEA 单文件运行时（含 Node.js + 引导器）
+├── node_modules/    # 依赖（构建时 npm install 的全量拷贝）
+└── <入口目录>/      # 入口所在目录（入口在根则只收入口文件）
+```
+
+### 插件作者须知
+
+- **为什么不使用项目的 `sea-config.json`**：SEA 单文件特性（`assets`
+  内嵌资源、`useCodeCache`、自定义 `main`）在目录式分发布局下均不生效——
+  资源本就随入口目录分发（`fs` 即可读取），`main` 必须为 Packer 引导器。
+  Packer 构建使用自己的临时 `sea-config.packer.json`（构建后删除），
+  不读取项目中的 `sea-config.json`，可忽略
+- 自定义编译流程（如 `tsc -p tsconfig.build.json`、bundler）→ 写进
+  `scripts.build`，Packer 原样执行 `npm run build`
+- 不想要脚本介入 → 删除 `scripts.build`，Packer 直接执行 `npx tsc`
+- 构建期间生成的 `package-lock.json` 若原本不存在，构建后自动清理
 
 ---
 
