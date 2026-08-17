@@ -74,85 +74,64 @@ class DebugTab(ctk.CTkFrame):
     def _build_ui(self) -> None:
         self.grid_columnconfigure(1, weight=1)
 
-        # ---- 调试模式（下拉单选） ----
+        # ---- row 0: 调试模式 + 检测 DGHub ----
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.grid(row=0, column=0, columnspan=2, sticky="ew",
                  padx=10, pady=(10, 0))
+        row.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(row, text="调试模式", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, padx=(0, 5), sticky="w")
+        mode_row = ctk.CTkFrame(row, fg_color="transparent")
+        mode_row.grid(row=0, column=1, sticky="w", padx=5)
         self._mode_menu = ctk.CTkOptionMenu(
-            row, width=160,
+            mode_row, width=220,
             values=[label for label, _ in _MODE_CHOICES],
             command=self._on_mode_changed)
-        self._mode_menu.grid(row=0, column=1, sticky="w", padx=5)
+        self._mode_menu.pack(side="left")
         self._controls.append(self._mode_menu)
-        self._mode_hint = ctk.CTkLabel(
-            row, text="", font=ctk.CTkFont(size=11),
-            text_color=("gray40", "gray60"), anchor="w", wraplength=560,
-            justify="left")
-        self._mode_hint.grid(row=0, column=2, sticky="w", padx=(10, 0))
-
-        # ---- 环境变量区 ----
-        env_frame = ctk.CTkFrame(self, fg_color="transparent")
-        env_frame.grid(row=1, column=0, columnspan=2, sticky="ew",
-                       padx=10, pady=(12, 0))
-        env_frame.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(env_frame, text="环境变量", width=_LABEL_W,
-                     anchor="w", font=ctk.CTkFont(weight="bold")).grid(
-            row=0, column=0, padx=(0, 5), sticky="w")
-
-        ctk.CTkLabel(env_frame, text="令牌（DGHUB_TOKEN）", width=_LABEL_W,
-                     anchor="w").grid(
-            row=1, column=0, padx=(0, 5), sticky="w", pady=3)
-        token_row = ctk.CTkFrame(env_frame, fg_color="transparent")
-        token_row.grid(row=1, column=1, sticky="w", padx=5, pady=3)
-        entry = ctk.CTkEntry(token_row, textvariable=self._token_var,
-                             width=240)
-        entry._is_focused = False  # placeholder/焦点状态统一
-        entry.pack(side="left")
-        self._controls.append(entry)
-
-        detect_row = ctk.CTkFrame(token_row, fg_color="transparent")
-        detect_row.pack(side="left", padx=(5, 0))
         self._detect_btn = ctk.CTkButton(
-            detect_row, text="检测 DGHub", width=100,
+            mode_row, text="检测 DGHub", width=110,
             command=self._detect_clicked)
-        self._detect_btn.pack(side="left")
+        self._detect_btn.pack(side="left", padx=(10, 0))
         self._controls.append(self._detect_btn)
         self._detect_hint = ctk.CTkLabel(
-            detect_row, text="", font=ctk.CTkFont(size=11),
+            mode_row, text="", font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"), anchor="w")
-        self._detect_hint.pack(side="left", padx=(10, 0))
+        self._detect_hint.pack(side="left", padx=(8, 0))
 
-        ctk.CTkLabel(
-            env_frame,
-            text="主机与端口在「设置」页填写；点击右侧按钮检测 DGHub"
-                 "并自动拉取令牌。",
-            font=ctk.CTkFont(size=11),
-            text_color=("gray40", "gray60"),
-            wraplength=560, justify="left",
-        ).grid(row=2, column=0, columnspan=2, sticky="w",
-               padx=(0, 5), pady=(0, 6))
-
-        # ---- 启动/停止 + 状态行 ----
+        # ---- row 1: 启动/停止 + 状态 ----
         bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.grid(row=2, column=0, columnspan=2, sticky="ew",
-                    padx=10, pady=(14, 0))
+        bottom.grid(row=1, column=0, columnspan=2, sticky="ew",
+                    padx=10, pady=(12, 0))
+        bottom.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(bottom, text="操作", width=_LABEL_W, anchor="w",
+                     font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=0, padx=(0, 5), sticky="w")
+        action_row = ctk.CTkFrame(bottom, fg_color="transparent")
+        action_row.grid(row=0, column=1, sticky="w", padx=5)
         self._start_btn = ctk.CTkButton(
-            bottom, text="启动调试", width=110,
+            action_row, text="启动调试", width=110,
             command=self._start_clicked)
         self._start_btn.pack(side="left")
         self._controls.append(self._start_btn)
         self._stop_btn = ctk.CTkButton(
-            bottom, text="停止", width=90,
+            action_row, text="停止", width=90,
             command=self._stop_clicked)
         self._stop_btn.pack(side="left", padx=(8, 0))
         self._controls.append(self._stop_btn)
         self._status_lbl = ctk.CTkLabel(
-            bottom, text="空闲", font=ctk.CTkFont(size=12),
+            action_row, text="空闲", font=ctk.CTkFont(size=12),
             text_color=("gray40", "gray60"), anchor="w")
         self._status_lbl.pack(side="left", padx=(16, 0))
+
+        # ---- row 2: 动态提示行（模式说明 / 校验结果） ----
+        self._hint_lbl = ctk.CTkLabel(
+            self, text="", font=ctk.CTkFont(size=11),
+            text_color=("gray40", "gray60"), anchor="w",
+            wraplength=640, justify="left")
+        self._hint_lbl.grid(row=2, column=0, columnspan=2, sticky="ew",
+                            padx=(10, 10), pady=(8, 0))
 
     # ------------------------------------------------------------------
     # 状态与提示
@@ -165,13 +144,13 @@ class DebugTab(ctk.CTkFrame):
     def _update_hint(self) -> None:
         """按模式与编译系统刷新说明/不匹配提示（入口问题在调试时才检测）。"""
         if self._mode_var.get() == "调试运行":
-            self._mode_hint.configure(
+            self._hint_lbl.configure(
                 text="构建后运行，位于 插件目录/debug/ 下",
                 text_color=("gray40", "gray60"))
             return
         comp = self._current_compiler()
         if comp is None:
-            self._mode_hint.configure(
+            self._hint_lbl.configure(
                 text="请先在编译页选择编译系统", text_color=("gray40", "gray60"))
             return
         # 清单格式与编译系统匹配性检查（优先级最高）
@@ -180,7 +159,7 @@ class DebugTab(ctk.CTkFrame):
             manifest = self._pm.read_project().get("compiler", {}).get("manifest", "") or ""
         if manifest and not comp.is_known_manifest(Path(manifest).name):
             need = "package.json" if comp.id == "node" else "pyproject.toml"
-            self._mode_hint.configure(
+            self._hint_lbl.configure(
                 text=f"清单格式与编译系统不匹配，{comp.label} 需要 {need}",
                 text_color=("#C0504D", "#E57373"))
             return
@@ -192,13 +171,13 @@ class DebugTab(ctk.CTkFrame):
                 text = "插件目录缺少 package.json，无法调试源码"
             else:
                 text = f"编译系统 '{comp.label}' 不支持「调试源码」"
-            self._mode_hint.configure(
+            self._hint_lbl.configure(
                 text=text, text_color=("#C0504D", "#E57373"))
             return
         # 正常提示：按编译区分入口来源
         entry_src = ("package.json main 入口" if comp.id == "node"
                      else "[tool.dghub].entry 源码")
-        self._mode_hint.configure(
+        self._hint_lbl.configure(
             text=f"运行 {entry_src}，注入 .dghub-sdk manifest",
             text_color=("gray40", "gray60"))
 
@@ -264,6 +243,9 @@ class DebugTab(ctk.CTkFrame):
 
     def _start_clicked(self) -> None:
         if self._running or not self._pm or not self._plugin_dir:
+            return
+        if not self._token_var.get().strip():
+            self._set_status("请先检测 DGHub", ("#C0504D", "#E57373"))
             return
         self._running = True
         self._set_status("启动中...", ("#2E7D32", "#4CAF50"))
