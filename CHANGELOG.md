@@ -5,7 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
-的批次发布至 PyPI（版本跳号为预期行为）。
+的批次发布至 PyPI（Python）与 npm（TypeScript）。
+
+## [0.13.1] - 2026-08-17
+
+### 修复
+
+- **Packer**：Node.js 编译的 SEA 临时配置改用独立文件名
+  `sea-config.packer.json`——不再覆盖/删除项目自带的 `sea-config.json`
+  （其单文件特性在目录式产物下不生效，Packer 不读取）
+
+### 变更
+
+- **SDK (TypeScript)**：使用指南附录重写为「Packer 如何读取 Node.js
+  项目结构」——入口声明 / 构建流程 / 依赖管理（npm 为准） / 产物布局 /
+  插件作者须知（sea-config 不被使用的原因）
+- **SDK (Python)**：使用指南新增「Packer 如何读取 Python 项目结构」
+  附录——入口声明 / 构建流程 / 产物布局 / 插件作者须知（.spec 与
+  `[tool.pyinstaller]` 被固定产物契约接管）
 
 ## [0.13.0] - 2026-08-17
 
