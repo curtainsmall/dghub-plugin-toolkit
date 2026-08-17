@@ -246,8 +246,7 @@ Packer 构建一律执行 `npm install`，不感知 yarn / pnpm：
 - 本地开发用 yarn / pnpm 没有问题，但**发布构建的依赖以 npm 解析结果为准**，
   建议按 npm 语义验证后再发布
 
-Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.yaml`；
-构建自产的 `package-lock.json` 若原本不存在，构建后自动清理。
+Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.yaml`。
 
 ### 产物布局
 
@@ -270,7 +269,6 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 - 自定义编译流程（如 `tsc -p tsconfig.build.json`、bundler）→ 写进
   `scripts.build`，Packer 原样执行 `npm run build`
 - 不想要脚本介入 → 删除 `scripts.build`，Packer 直接执行 `npx tsc`
-- 构建期间生成的 `package-lock.json` 若原本不存在，构建后自动清理
 
 ---
 

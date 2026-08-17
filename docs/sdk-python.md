@@ -13,7 +13,7 @@
 - [状态上报](#状态上报)
 - [错误处理](#错误处理)
 - [手动接入（调试）](#手动接入调试)
-- [附录：插件入口声明](#附录插件入口声明)
+- [附录：Packer 如何读取 Python 项目结构](#附录packer-如何读取-python-项目结构)
 
 ---
 
@@ -184,14 +184,59 @@ python main.py
 
 或代码中临时 patch：`os.environ["DGHUB_HOST"] / ["DGHUB_PORT"] / ["DGHUB_TOKEN"]`。
 
-## 附录：插件入口声明
+## 附录：Packer 如何读取 Python 项目结构
 
-Python 插件入口由 `pyproject.toml` 的 `[tool.dghub].entry` 声明（相对清单文件所在目录）。该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时不需要：
+Packer 的 Python 编译系统（Python (uv + PyInstaller)）只从
+**`pyproject.toml`** 读取两个必需输入——依赖声明与 `[tool.dghub].entry`
+入口。其余打包定制（`.spec`、`[tool.pyinstaller]`）由 Packer 的固定产物
+契约接管。
+
+### 入口声明
+
+插件入口由 `pyproject.toml` 的 `[tool.dghub].entry` 声明（相对清单文件
+所在目录）。该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时
+不需要：
 
 ```toml
 [tool.dghub]
 entry = "src/main.py"
 ```
+
+依赖清单**仅接受 `pyproject.toml`**——`setup.py` / `setup.cfg` /
+`requirements*.txt` 无法声明入口，不被接受。
+
+### 构建流程（Packer 自动执行，两步）
+
+1. **安装依赖**：`uv pip install --target .deps/ -r pyproject.toml`
+   （装到输出目录的 `.deps/`，构建后清理；设置页 PyPI 镜像源经
+   `UV_DEFAULT_INDEX` 注入）
+2. **PyInstaller onedir 打包**（参数固定，产物契约）：
+   - `--onedir --windowed --name <插件名>`，spec 生成到 cache 目录
+     （不写入项目根，构建后不残留）
+   - `.deps` 顶层包自动 `--collect-data` / `--copy-metadata`
+     （litellm 等带数据文件的依赖包）
+   - 命名空间包（无 `__init__.py`）整体 `--add-data` 复制源码 +
+     `--hidden-import` 收集其 import 的宿主包子模块（tiktoken_ext 等）
+
+### 产物布局
+
+`<输出目录>/.pyi/<插件名>/` 下（PyInstaller onedir）：
+
+```
+.pyi/<插件名>/
+├── <插件名>.exe     # 自包含运行时（Python 解释器 + 入口）
+└── _internal/       # 依赖与资源（PyInstaller onedir 产物）
+```
+
+### 插件作者须知
+
+- **为什么不使用项目的 `.spec` / `[tool.pyinstaller]`**：产物条目
+  （exe + `_internal/`）与产物位置由 Packer 固定（收集管线按此解析），
+  自由定制会破坏产物收集。PyInstaller 的配置优先级为 CLI > pyproject，
+  未被 Packer CLI 覆盖的字段（如 `icon`）可能隐式生效——无文档承诺，
+  **不建议依赖**
+- 调试构建：`uv run --project <插件目录>` 直接运行入口源码
+  （`[tool.dghub].entry`）
 
 ---
 
