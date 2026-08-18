@@ -1,7 +1,9 @@
-"""Build tab — 打包内容与发布选项（纯 GUI 工具的单视图构建页）。
+"""Build tab — 编译设置 + 打包内容与发布选项（纯 GUI 工具的单视图构建页）。
 
+- 编译设置：内嵌 CompileTab（直接平铺）——编译系统 / 依赖清单 /
+  产物模式；设置变化自动重新填充 deduce 产物条目
 - 打包内容：统一文件选择列表（文件 / 目录 / 规则三种条目，标签标记入口）
-  +「添加文件」/「添加目录」（常规系统选择器）+「添加规则」+「从编译填充」
+  +「添加文件」/「添加目录」（常规系统选择器）+「添加规则」
 - 发布选项：输出固定为 .zip 分发包 + 预览树（输出目录在顶部栏）
 """
 
@@ -14,6 +16,7 @@ import customtkinter as ctk
 from backend.builder import Builder, evaluate_pattern
 from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
+from gui.compile_tab import CompileTab
 from gui.widgets import center_dialog, reset_entry_border
 
 # 右栏各行统一的前导标签宽度（像素）
@@ -34,10 +37,9 @@ _TAG_STYLES = {
 
 
 class BuildTab(ctk.CTkFrame):
-    """构建页：项目根 / 入口 / 打包内容 / 发布选项 / 预览。"""
-
+    """构建页：编译设置 / 包名 / 打包内容 / 发布选项 / 预览。"""
     def __init__(self, master: Any,
-                 on_fill_builder: Callable[[], None] | None = None,
+                 on_compile_changed: Callable[[], None] | None = None,
                  on_error_cleared: Callable[[], None] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
@@ -45,7 +47,7 @@ class BuildTab(ctk.CTkFrame):
         self._plugin_dir: str | None = None
         self._loading = False
         self._enabled = False
-        self._on_fill_builder = on_fill_builder
+        self._on_compile_changed = on_compile_changed
         self._on_error_cleared = on_error_cleared
         self._controls: list[ctk.CTkBaseClass] = []
         self._error_rels: set[str] = set()  # 校验失败的条目相对路径
@@ -62,6 +64,7 @@ class BuildTab(ctk.CTkFrame):
                 w.configure(state=state)
             except Exception:
                 pass
+        self._compile_view._set_enabled(enabled)
 
     # ------------------------------------------------------------------
     # UI 构建
@@ -72,20 +75,27 @@ class BuildTab(ctk.CTkFrame):
         self.grid_columnconfigure(1, weight=2)
         self.grid_rowconfigure(0, weight=1)
 
-        # ---- 左栏：打包内容 + 发布 ----
+        # ---- 左栏：编译设置 + 打包内容 + 发布 ----
         left = ctk.CTkFrame(self)
         left.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
         left.grid_columnconfigure(1, weight=1)
 
-        # 打包内容（添加文件/添加目录 = 常规系统选择器）
+        # 编译设置（完全平铺：编译系统 / 依赖清单 / 产物模式，
+        # 与下方区块同背景无分组色块）
+        self._compile_view = CompileTab(
+            left, fg_color="transparent",
+            on_changed=self._on_compile_inner_changed)
+        self._compile_view.grid(row=0, column=0, columnspan=4,
+                                sticky="ew", padx=0, pady=(10, 0))
+
         # 包名（自定义输出包名；留空 = 自动：插件目录名）
         ctk.CTkLabel(left, text="包名", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=0, column=0, padx=10, pady=(16, 5), sticky="w")
+            row=1, column=0, padx=10, pady=(16, 5), sticky="w")
         self._name_entry = ctk.CTkEntry(
             left, placeholder_text="留空使用插件目录名",
             font=ctk.CTkFont(size=11))
-        self._name_entry.grid(row=0, column=1, columnspan=2, sticky="ew",
+        self._name_entry.grid(row=1, column=1, columnspan=2, sticky="ew",
                               padx=(5, 10), pady=(16, 5))
         self._name_entry.bind("<FocusOut>", lambda _: self._save_packer_name())
         self._name_entry.bind("<Return>", lambda _: self._save_packer_name())
@@ -100,16 +110,16 @@ class BuildTab(ctk.CTkFrame):
             left, text="按产物模式加后缀",
             variable=self._auto_suffix_var,
             command=self._on_auto_suffix_toggled)
-        self._auto_suffix_check.grid(row=0, column=3, sticky="w",
+        self._auto_suffix_check.grid(row=1, column=3, sticky="w",
                                      padx=(5, 10), pady=(16, 5))
         self._controls.append(self._auto_suffix_check)
 
         # 打包内容：添加文件/目录/规则 = 系统选择器入口
         ctk.CTkLabel(left, text="打包内容", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=1, column=0, padx=10, pady=(0, 5), sticky="w")
+            row=2, column=0, padx=10, pady=(0, 5), sticky="w")
         add_frame = ctk.CTkFrame(left, fg_color="transparent")
-        add_frame.grid(row=1, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+        add_frame.grid(row=2, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
         file_btn = ctk.CTkButton(add_frame, text="添加文件", width=90,
                                  command=self._add_files)
         file_btn.pack(side="left")
@@ -119,27 +129,15 @@ class BuildTab(ctk.CTkFrame):
         rule_btn = ctk.CTkButton(add_frame, text="添加规则", width=90,
                                  command=self._add_rule)
         rule_btn.pack(side="left", padx=(5, 0))
-        fill_btn = ctk.CTkButton(
-            left, text="从编译填充", width=110,
-            command=self._fill_builder_clicked)
-        fill_btn.grid(row=1, column=3, sticky="w",
-                      padx=(5, 10), pady=(0, 5))
-        # 填充反馈：位于按钮左侧（绿 = 有添加；黄 = 无变化）；固定宽度防布局移动
-        self._fill_hint_lbl = ctk.CTkLabel(
-            left, text="", width=130, font=ctk.CTkFont(size=11), anchor="e")
-        self._fill_hint_lbl.grid(row=1, column=2, sticky="e",
-                                 padx=(5, 0), pady=(0, 5))
-        self._controls.extend([file_btn, dir_btn, rule_btn, fill_btn])
+        self._controls.extend([file_btn, dir_btn, rule_btn])
 
         # 添加提示（如项目根外文件被跳过），有内容才显示
         self._add_hint_lbl = ctk.CTkLabel(
             left, text="", font=ctk.CTkFont(size=11),
             text_color="#FF4444", anchor="w")
-        self._add_hint_lbl.grid(row=2, column=1, columnspan=3, sticky="w",
+        self._add_hint_lbl.grid(row=3, column=1, columnspan=3, sticky="w",
                                 padx=5)
         self._add_hint_lbl.grid_remove()
-
-        # 规则输入行（默认隐藏）
 
         # 条目列表
         self._item_list = ctk.CTkScrollableFrame(left, fg_color="transparent")
@@ -230,6 +228,19 @@ class BuildTab(ctk.CTkFrame):
         self._refresh_item_list()
         self._refresh_preview()
 
+    # ------------------------------------------------------------------
+    # 编译设置区块（变化透传 → app 自动填充）
+    # ------------------------------------------------------------------
+
+    def _on_compile_inner_changed(self) -> None:
+        """内嵌 CompileTab 设置变化：透传给 app（自动填充）。"""
+        if self._on_compile_changed:
+            self._on_compile_changed()
+
+    def get_compile_view(self) -> CompileTab:
+        """供 app 组装 BuildContext（编译系统 / 编译设置字段）。"""
+        return self._compile_view
+
     def _rel_to_source(self, path: str) -> str | None:
         """绝对路径 → 相对项目根的 posix 路径；不在项目根内返回 None。"""
         base = Path(self._plugin_dir or ".")
@@ -237,13 +248,6 @@ class BuildTab(ctk.CTkFrame):
             return Path(path).resolve().relative_to(base.resolve()).as_posix()
         except ValueError:
             return None
-
-    def show_fill_result(self, added: int) -> None:
-        """「从编译填充」反馈（按钮左侧）：添加 N 个文件；绿 = 有添加、黄 = 无变化。"""
-        self._fill_hint_lbl.configure(
-            text=f"已添加 {added} 个文件",
-            text_color=("#2E7D32", "#4CAF50") if added > 0
-            else ("#B8860B", "#E8C547"))
 
     def _show_add_hint(self, msg: str,
                        color: str | tuple[str, str] = "#FF4444") -> None:
@@ -305,25 +309,6 @@ class BuildTab(ctk.CTkFrame):
                       command=on_ok).pack(side="right", padx=5)
         entry.bind("<Return>", lambda _e: on_ok())
         dlg.wait_window()
-
-    def _fill_builder_clicked(self) -> None:
-        self.clear_errors()  # 内容可能变化，先清旧错误高亮
-        if self._on_fill_builder:
-            self._on_fill_builder()
-
-    def clear_derived(self) -> None:
-        """清除 deduce 生成的编译产物条目（编译设置变化后旧产物失效）。
-
-        编译系统/产物模式切换后由 app 调用——derived 条目（exe /
-        start_node.py / node_modules / dist / _internal）不再匹配当前
-        编译配置，用户需重新按「从编译填充」。
-        """
-        b = self._builder()
-        if b is None:
-            return
-        b.remove_derived()
-        self._refresh_item_list()
-        self._refresh_preview()
 
     def _refresh_item_list(self) -> None:
         for w in self._item_list.winfo_children():
@@ -620,6 +605,7 @@ class BuildTab(ctk.CTkFrame):
         self._error_rels = set()  # 新项目清除旧错误高亮
         self._area_error = ""
         self._area_err_lbl.grid_remove()
+        self._compile_view.set_plugin_dir(d, pm)
         if self._pm:
             b = self._builder()
             name = b.get_packer_name() if b else ""

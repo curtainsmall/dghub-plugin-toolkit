@@ -19,7 +19,6 @@ def _norm_dir(p: str) -> str:
 import customtkinter as ctk
 
 from gui.build_tab import BuildTab
-from gui.compile_tab import CompileTab
 from gui.debug_tab import DebugTab
 from backend.builder import BuildError, Builder
 from backend.compilers import get_compiler
@@ -70,7 +69,6 @@ class App(ctk.CTk):
 
         # -- tabs --
         self._info_tab = self._tab_view.add("信息")
-        self._compile_tab = self._tab_view.add("编译")
         self._dist_tab = self._tab_view.add("构建")
         self._debug_tab = self._tab_view.add("调试")
         self._settings_tab = self._tab_view.add("设置")
@@ -81,13 +79,9 @@ class App(ctk.CTk):
             self._info_tab, on_field_edit=self._on_info_field_edit)
         self._info_view.pack(fill="both", expand=True)
 
-        self._compile_view = CompileTab(
-            self._compile_tab, on_changed=self._on_compile_changed)
-        self._compile_view.pack(fill="both", expand=True)
-
         self._dist_view = BuildTab(
             self._dist_tab,
-            on_fill_builder=self._fill_builder_clicked,
+            on_compile_changed=self._on_compile_changed,
             on_error_cleared=self._on_dist_errors_cleared)
         self._dist_view.pack(fill="both", expand=True)
 
@@ -203,15 +197,30 @@ class App(ctk.CTk):
             btn.pack_forget()
 
     def _on_compile_changed(self) -> None:
-        """编译设置变更（CompileTab 回调）。
+        """编译设置变更（构建页内嵌编译设置回调）→ 自动重新填充。
 
-        编译系统/产物模式变化后旧 deduce 产物条目失效——清除 build_tab
-        的 derived 条目，用户需重新按「从编译填充」。
+        编译系统/产物模式/清单变化后旧 deduce 条目失效——直接执行
+        fill_builder（清旧 derived + 按 deduce 补新，幂等只填空），
+        无需手动「从编译填充」。
         """
         self._debug_view._update_hint()
         view = getattr(self, "_dist_view", None)
-        if view is not None:
-            view.clear_derived()
+        if view is None:
+            return
+        view.refresh_preview(self._output_dir)
+        if not self._pm or not self._plugin_dir:
+            return
+        try:
+            ctx = self._make_build_context()
+            applied = fill_builder(ctx)
+            for line in applied:
+                self._logger.info(f"已应用: {line}")
+            if applied:
+                # 条目已变化：重载列表（derived 优先显示）并刷新预览
+                view.set_plugin_dir(self._plugin_dir, self._pm)
+                view.refresh_preview(self._output_dir)
+        except Exception as exc:  # 填充失败不阻断编辑（构建时再报）
+            self._logger.error(f"自动填充失败: {exc}")
 
     # ------------------------------------------------------------------
     # bottom bar
@@ -363,8 +372,8 @@ class App(ctk.CTk):
         return ok
 
     def _validate_dist_tab(self) -> bool:
-        """Validate 构建页（含编译页状态），一次性检测。Returns True if valid."""
-        self._compile_view.save_settings()
+        """Validate 构建页（含编译设置状态），一次性检测。Returns True if valid."""
+        self._dist_view.get_compile_view().save_settings()
         self._dist_view.save_settings()
         ctx = self._make_build_context()
         ok = True
@@ -415,21 +424,22 @@ class App(ctk.CTk):
         return ok
 
     def _make_build_context(self) -> BuildContext:
-        """组装校验/构建共用的上下文（编译页 + 构建页状态）。"""
+        """组装校验/构建共用的上下文（构建页内嵌编译设置状态）。"""
         plugin_dir = Path(self._plugin_dir or ".")
+        compile_view = self._dist_view.get_compile_view()
         return BuildContext(
             plugin_dir=plugin_dir,
             source_dir=Path(self._plugin_dir or "."),
             output_dir=Path(self._output_dir) if self._output_dir else plugin_dir / "output",
             plugin_name=plugin_dir.name,
-            compile_system=self._compile_view.get_compile_system(),
+            compile_system=compile_view.get_compile_system(),
             builder=Builder(self._pm) if self._pm else Builder(
                 ProjectManager(str(plugin_dir))),
             log=self._logger,
             pm=self._pm,
             pypi_index=self._settings_view.get_pypi_index(),
             canceller=self._canceller,
-            compile_cfg=self._compile_view.get_compile_cfg(),
+            compile_cfg=compile_view.get_compile_cfg(),
         )
 
     # ------------------------------------------------------------------
@@ -445,8 +455,7 @@ class App(ctk.CTk):
             except Exception:
                 pass
         self._info_view._set_enabled(not locked)
-        self._compile_view._set_enabled(not locked)
-        self._dist_view._set_enabled(not locked)
+        self._dist_view._set_enabled(not locked)  # 含内嵌编译设置
         # 调试运行期间构建按钮同样禁用（互斥），见 _on_debug_state_changed
         self._debug_view._set_enabled(not locked)
 
@@ -613,7 +622,7 @@ class App(ctk.CTk):
             self._build_success = True
 
             # Step 2: save settings
-            self._compile_view.save_settings()
+            self._dist_view.get_compile_view().save_settings()
             self._dist_view.save_settings()
             self._logger.detail("配置已保存")
 
@@ -693,8 +702,7 @@ class App(ctk.CTk):
 
         # Push to all tabs
         self._info_view.set_plugin_dir(d, self._pm)
-        self._compile_view.set_plugin_dir(d, self._pm)
-        self._dist_view.set_plugin_dir(d, self._pm)
+        self._dist_view.set_plugin_dir(d, self._pm)  # 含内嵌编译设置
         self._debug_view.set_plugin_dir(d, self._pm)
 
         # Source dir（顶层 source_dir；未设置回退插件目录）
@@ -721,27 +729,7 @@ class App(ctk.CTk):
 
         self._logger.info(f"已加载项目: {d}")
         self._save_last_plugin_dir(d)
-
-    def _fill_builder_clicked(self) -> None:
-        """「从编译填充构建内容」按钮：probe + deduce 串联（只填空）。"""
-        if not self._pm or not self._plugin_dir:
-            self._logger.error("请先选择插件目录")
-            return
-        self._compile_view.save_settings()
-        self._dist_view.save_settings()
-        ctx = self._make_build_context()
-        applied = fill_builder(ctx)
-        # 任何分支产生的 applied 行都记入日志
-        # （「无」编译是合法状态；无变化时 applied 为空，均无需额外提示）
-        for line in applied:
-            self._logger.info(f"已应用: {line}")
-        # 按钮左侧反馈：本次 deduce 实际添加的文件数
-        # （「无」编译 deduce 不产出 → added 自然为 0，无需特判）
-        added = sum(1 for l in applied if l.startswith("添加打包内容"))
-        self._dist_view.show_fill_result(added)
-        # 只要有任何变化（含清除旧 derived）就刷新列表
-        if applied:
-            self._dist_view.set_plugin_dir(self._plugin_dir, self._pm)
-            self._debug_view.set_plugin_dir(self._plugin_dir, self._pm)
-            self._dist_view.refresh_preview(self._output_dir)
+        # 加载后同步编译产物条目（幂等只填空：正常项目无变化；
+        # 新项目/旧版升级缺 deduce 条目时自动补全，替代原「从编译填充」）
+        self._on_compile_changed()
     

@@ -23,6 +23,9 @@
   入口语义——编译系统自持入口（exe / 启动器 / 源码），与 deduced
   同名的手动 entry 尊重保留，异名降级为普通内容
 - **Packer**：GUI 术语中文化（复选框、占位符等 UI 文案统一为中文）
+- **Packer**：编译页合并进构建页——编译系统 / 依赖清单 / 产物模式
+  直接平铺在构建页（与包名、打包内容并列），「从编译填充」按钮移除：
+  编译设置变化或项目加载时自动重新填充 deduce 条目（幂等）
 
 ### 新增
 
@@ -44,10 +47,14 @@
   与模拟宿主协议的 `PYTHONPATH`（入口目录 / 插件根 / `vendor/`）——
   依赖版直跑源码入口不再缺依赖
 - **Packer**：调试 folder 发布前清空目标目录，不再残留旧构建文件
+- **Packer**：移除 GUI 的 PyInstaller 预检提示（编辑期后台检测）——
+  构建管线 `_check_pyinstaller` 已有等价且更完整的检测（报错含安装命令）
+- **Packer**：Python 编译的 `get_compile_cfg` 漏读 self_contained——
+  依赖版项目正式构建误走自包含（PyInstaller）分支
 - **Packer**：调试构建 `_make_debug_ctx` 漏读 self_contained 字段，
   导致 deps 项目调试构建误走 exe 分支
-- **Packer**：编译设置变化时清除 build_tab 的 derived 条目（需重新
-  「从编译填充」）
+- **Packer**：编译设置变化时旧 deduced 条目残留——由构建前
+  `sync_derived` 重建取代（含自动填充，无需手动「从编译填充」）
 - **Packer**：复选框未绑定变量导致勾选不保存
 
 ## [0.13.1] - 2026-08-17

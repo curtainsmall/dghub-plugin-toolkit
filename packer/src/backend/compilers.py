@@ -725,8 +725,8 @@ COMPILERS: dict[str, Compiler] = {
 # 编译选项（GUI 下拉 / config 校验）：("" 无) 优先于具体编译
 COMPILER_CHOICES: tuple[tuple[str, str], ...] = (
     ("", "无"),
-    ("python", "Python (uv + PyInstaller)"),
-    ("node", "Node.js (npm + SEA)"),
+    ("python", "Python"),
+    ("node", "Node.js"),
     ("command", "自定义命令"),
 )
 

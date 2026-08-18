@@ -230,7 +230,7 @@ TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存
      <debug/cache>/tsbuildinfo.json`
    - 正式构建：`package.json` 有 `scripts.build` → 执行 `npm run build`；
      否则回退为直接执行 `npx tsc`
-3. **按产物模式打包**（编译页「自包含」复选框，默认勾选）：
+3. **按产物模式打包**（构建页「编译设置」的「自包含」复选框，默认勾选）：
    - **自包含（勾选）**：打包 Node.js 运行时到 exe（SEA 注入），
      目标机无需安装 Node——临时生成 `sea-bootstrap.cjs` 引导器与
      `sea-config.packer.json` → `node --experimental-sea-config` 生成 blob →

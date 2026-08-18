@@ -5,18 +5,14 @@
 在编译内（backend.compilers），本页只做 UI 呈现与持久化。
 """
 
-import subprocess
-import threading
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Callable
 
 import customtkinter as ctk
 
-from backend.py_compiler import _get_python_exe
 from backend.compilers import COMPILERS, COMPILER_CHOICES, get_compiler
 from backend.project_manager import ProjectManager
-from backend.winflags import _NO_WINDOW
 from gui.widgets import ToolTip, icon_font
 
 # 右栏各行统一的前导标签宽度（像素）
@@ -135,17 +131,8 @@ class CompileTab(ctk.CTkFrame):
             font=icon_font(), cursor="question_arrow")
         self._bundle_hint_icon.pack(side="left", padx=(6, 0))
         self._controls.append(self._bundle_check)
-        self._bundle_hint_tip = ToolTip(
-            self._bundle_hint_icon,
-            "开启：打包 Node.js 运行时（SEA 注入），目标机无需安装 Node\n"
-            "关闭：不打包运行时，使用系统 Node.js；跳过 SEA 打包")
+        self._bundle_hint_tip = ToolTip(self._bundle_hint_icon, "")
         self._bundle_frame.grid_remove()
-
-
-        self._pyinstaller_hint = ctk.CTkLabel(
-            self._py_frame, text="", font=ctk.CTkFont(size=12),
-            text_color="gray", anchor="w")
-        self._pyinstaller_hint.grid(row=2, column=1, sticky="w", padx=5)
 
         # ---- Command 设置区（compile_system="command" 时显示）----
         self._cmd_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -226,7 +213,6 @@ class CompileTab(ctk.CTkFrame):
             section = dict(self._pm.get_field("compiler") or {})
             section["compile_system"] = self._compile_id()
             self._pm.set_field("compiler", section)
-        self._check_pyinstaller_bg()  # Python 选中时后台预检
         if self._on_changed:
             self._on_changed()
 
@@ -256,17 +242,29 @@ class CompileTab(ctk.CTkFrame):
         if cid in ("python", "node"):
             # Python 与 Node 共用依赖清单区与「自包含」模式区；
             # PyInstaller 预检仅自包含 Python 显示（依赖版不需要）
-            if cid == "node" or not self._bundle_var.get():
-                self._pyinstaller_hint.grid_remove()
-            else:
-                self._pyinstaller_hint.grid()
             self._bundle_frame.grid()
             self._py_frame.grid()
         elif cid == "command":
             self._cmd_frame.grid()
         else:
             self._none_frame.grid()
+        self._refresh_bundle_tip()
         comp = get_compiler(cid)
+
+    def _refresh_bundle_tip(self) -> None:
+        """产物模式 tooltip 随编译系统变化（Python：PyInstaller / Node：SEA）。"""
+        if self._compile_id() == "node":
+            text = ("开启：打包 Node.js 运行时（SEA 注入），"
+                    "目标机无需安装 Node\n"
+                    "关闭：不打包运行时，使用系统 Node.js；跳过 SEA 打包")
+        elif self._compile_id() == "python":
+            text = ("开启：打包 Python 运行时（PyInstaller onedir），"
+                    "目标机无需安装 Python\n"
+                    "关闭：不打包运行时，依赖系统 Python（uv 安装依赖到 "
+                    "vendor/，宿主自动注入导入路径）")
+        else:
+            text = ""
+        self._bundle_hint_tip.set_text(text)
 
     def _update_exec_state(self) -> None:
         """执行目录行始终可用——Command 区可见即 command 编译模式。"""
@@ -299,7 +297,6 @@ class CompileTab(ctk.CTkFrame):
             self._manifest_label.configure(
                 text=f"? {name} 未知清单", text_color=("#C0504D", "#E57373"))
         self._on_setting_changed()
-        self._check_pyinstaller_bg()
 
     def _on_bundle_toggled(self) -> None:
         """自包含 checkbox 变化 → 更新可见性并保存。"""
@@ -333,34 +330,6 @@ class CompileTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
     # PyInstaller 预检（后台线程，仅标注不阻断）
     # ------------------------------------------------------------------
-
-    def _check_pyinstaller_bg(self) -> None:
-        if self._compile_id() != "python":
-            return
-        if not self._bundle_var.get():
-            # 依赖版不需要 PyInstaller（跳过预检）
-            self._pyinstaller_hint.configure(text="")
-            return
-        threading.Thread(target=self._check_pyinstaller_work,
-                         daemon=True).start()
-
-    def _check_pyinstaller_work(self) -> None:
-        try:
-            result = subprocess.run(
-                _get_python_exe() + ["-m", "PyInstaller", "--version"],
-                capture_output=True, text=True, timeout=30,
-                creationflags=_NO_WINDOW)
-            ok = result.returncode == 0
-        except Exception:
-            ok = False
-        text = ("PyInstaller installed" if ok
-                else "PyInstaller required")
-        color = ("#2E7D32" if ok else "#FF4444")
-        try:
-            self.after(0, lambda: self._pyinstaller_hint.configure(
-                text=text, text_color=color))
-        except Exception:
-            pass
 
     # ------------------------------------------------------------------
     # 持久化
@@ -399,7 +368,6 @@ class CompileTab(ctk.CTkFrame):
                 self._loading = False
             self._update_visibility()
             self._update_exec_state()
-            self._check_pyinstaller_bg()
 
     def save_settings(self) -> None:
         """保存编译相关字段到 project.json 顶层。"""
@@ -423,7 +391,8 @@ class CompileTab(ctk.CTkFrame):
         """供 BuildContext 组装的编译设置字段。"""
         cid = self._compile_id()
         if cid == "python":
-            return {"manifest": self._manifest_var.get()}
+            return {"manifest": self._manifest_var.get(),
+                    "self_contained": self._bundle_var.get()}
         if cid == "node":
             return {"manifest": self._manifest_var.get(),
                     "self_contained": self._bundle_var.get()}

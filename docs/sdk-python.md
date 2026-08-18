@@ -207,7 +207,7 @@ entry = "src/main.py"
 
 ### 构建流程（Packer 自动执行）
 
-**自包含（编译页「自包含」复选框勾选，默认）**：
+**自包含（构建页「编译设置」的「自包含」复选框勾选，默认）**：
 
 1. **安装依赖**：`uv pip install --target .deps/ -r pyproject.toml`
    （装到输出目录的 `.deps/`，构建后清理；设置页 PyPI 镜像源经
