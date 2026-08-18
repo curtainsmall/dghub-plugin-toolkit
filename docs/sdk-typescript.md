@@ -230,11 +230,12 @@ TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存
      <debug/cache>/tsbuildinfo.json`
    - 正式构建：`package.json` 有 `scripts.build` → 执行 `npm run build`；
      否则回退为直接执行 `npx tsc`
-3. **按产物模式打包**（编译页「产物模式」选项，默认自包含）：
-   - **自包含（exe）**：临时生成 `sea-bootstrap.cjs` 引导器与
+3. **按产物模式打包**（编译页「自包含」checkbox，默认勾选）：
+   - **自包含（勾选）**：打包 Node.js 运行时到 exe（SEA 注入），
+     目标机无需安装 Node——临时生成 `sea-bootstrap.cjs` 引导器与
      `sea-config.packer.json` → `node --experimental-sea-config` 生成 blob →
      复制 `node.exe` → `postject` 注入 → 清理临时文件
-   - **依赖版（deps）**：跳过 SEA，生成 `start_node.py` 启动脚本
+   - **依赖版（不勾选）**：跳过 SEA，生成 `start_node.py` 启动脚本
      （~1KB，entry 指向它）——DGHub 以 `.py` 入口执行脚本（宿主自带
      Python 运行时），脚本拉起**系统 Node** 运行插件入口；目标机需
      预装 Node.js（framework-dependent）
@@ -257,7 +258,7 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 
 `<输出目录>/.node/<插件名>/` 下（目录式分发——exe 与依赖同目录）：
 
-**自包含（exe，默认）**——目标机零安装：
+**自包含（勾选）**——目标机零安装：
 
 ```
 .node/<插件名>/
@@ -266,7 +267,7 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 └── <入口目录>/      # 入口所在目录（入口在根则只收入口文件）
 ```
 
-**依赖版（deps）**——体积小，目标机需装 Node.js：
+**依赖版（不勾选）**——体积小，目标机需装 Node.js：
 
 ```
 .node/<插件名>/
@@ -276,7 +277,9 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 ```
 
 `manifest.entry` 相应为 `<插件名>.exe`（自包含）或 `start_node.py`
-（依赖版）——两者都是宿主已支持的 entry 类型。
+（依赖版）——两者都是宿主已支持的 entry 类型。构建页「按产物模式加后缀」
+checkbox 开启时，包名自动追加 `-self-contained` 或 `-dependent` 后缀
+（可在设置页自定义后缀文本）。
 
 ### 插件作者须知
 

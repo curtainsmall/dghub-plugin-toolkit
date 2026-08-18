@@ -7,6 +7,37 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（Python）与 npm（TypeScript）。
 
+## [0.14.0] - 2026-08-17
+
+### 变更
+
+- **Packer**：产物模式字段从 `bundle: "exe"|"deps"` 统一为
+  `self_contained: true|false`（编译页改为 checkbox，勾选 = 自包含 /
+  不勾选 = 依赖系统 Node）
+- **Packer**：移除「调试源码」模式（调试页统一为「调试运行」——增量
+  缓存构建已足够快，deps 模式的调试同样必须走构建过程与产物结构）
+- **Packer**：fill_builder 的 deduce 改为合并去重（已有 entry 不再
+  整体跳过，补缺失的产物目录 node_modules/dist/_internal）
+
+### 新增
+
+- **Packer**：构建页新增「按产物模式加后缀」checkbox——开启后自动追加
+  `-self-contained` / `-dependent` 到包名（可自定义后缀文本）
+- **Packer**：设置页新增自包含/依赖版后缀输入框（placeholder 显示默认值，
+  留空回退默认）；实时联动构建预览
+- **Packer**：设置页整体移入滚动容器，相关链接移至底部，新增「打开配置
+  目录」按钮
+- **Packer**：build_tab 的包名输入框 placeholder 动态显示默认包名
+  （插件目录名）
+
+### 修复
+
+- **Packer**：调试构建 `_make_debug_ctx` 漏读 bundle 字段，导致 deps
+  项目调试构建误走 exe 分支
+- **Packer**：编译设置变化时清除 build_tab 的 derived 条目（需重新
+  「从编译填充」）
+- **Packer**：CTkCheckBox 未绑定 variable 导致勾选不保存
+
 ## [0.13.1] - 2026-08-17
 
 ### 修复
