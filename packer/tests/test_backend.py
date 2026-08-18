@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.builder import BuildError, evaluate_pattern
+from backend.builder import BuildError, BuilderItem, evaluate_pattern
 from backend.debug_runner import resolve_run_command
 from backend.packaging import (package_plugin, cleanup_intermediates,
                                resolve_packer_name)
@@ -48,6 +48,41 @@ def test_builder_items_and_tags(make_project):
     assert "entry" in b.items()[1].tags
     b.remove_item(1)
     assert len(b.items()) == 2
+
+
+def test_builder_view_index_mapping(make_project):
+    """视图（deduced 在前 + 手动）索引下，删除/改标签命中正确条目。
+
+    回归：Node 模式列表（deduced 在前的视图）中删除手动条目，
+    曾误删前一个条目。
+    """
+    pm, b, _ = make_project()
+    b.set_deduced([
+        BuilderItem(dir="node_modules", derived=True),
+        BuilderItem(path="start_node.py", tags=["entry"], derived=True),
+    ])
+    b.add_file("package-lock.json")           # 手动（存储 = 视图 manual 部分）
+    # 视图：node_modules、start_node.py、package-lock.json
+    view = b.items()
+    assert view[0].dir == "node_modules"
+    assert view[1].path == "start_node.py"
+    assert view[2].path == "package-lock.json"
+    # 删除视图最后一项（package-lock.json）→ 只删它；deduced 不受影响
+    b.remove_item(2)
+    assert [i.to_dict() for i in b.items()] == [
+        {"dir": "node_modules", "derived": True},
+        {"path": "start_node.py", "tags": ["entry"], "derived": True}]
+    # deduced 索引只读：对 deduced 范围调用删除为 no-op
+    b.remove_item(0)
+    assert len(b.items()) == 2
+    # set_tags 视图索引：改 start_node.py（视图 1，deduced）为 no-op；
+    # 手动条目（视图 0 之后）可改
+    b.set_tags(1, [])   # deduced 只读 → 标签不变
+    assert "entry" in b.items()[1].tags
+    b.add_file("notes.txt")
+    b.set_tags(2, ["entry"])   # 视图 2 = notes.txt（手动）
+    items = b.items()
+    assert items[2].path == "notes.txt" and "entry" in items[2].tags
 
 
 def test_builder_entry_validation(make_project):
@@ -335,9 +370,11 @@ def test_sync_derived_rebuilds_on_mode_change(make_project, make_ctx):
     (plugin_dir / "pyproject.toml").write_text(
         "[tool.dghub]\nentry='main.py'\n")
     (plugin_dir / "main.py").write_text("x")
-    # 旧状态：自包含 derived 条目（exe entry + _internal）
-    b.add_file("tetris-py.exe", ["entry"], derived=True)
-    b.add_dir("_internal", derived=True)
+    # 旧状态：自包含 deduced 视图（exe entry + _internal，内存不落盘）
+    b.set_deduced([
+        BuilderItem(path="tetris-py.exe", tags=["entry"], derived=True),
+        BuilderItem(dir="_internal", derived=True),
+    ])
     # 手动条目保留
     b.add_file("notes.txt")
     # 切到依赖版后 sync
@@ -377,9 +414,8 @@ def test_sync_derived_keeps_matching_manual_entry(make_project, make_ctx):
         "[tool.dghub]\nentry='src/main.py'\n")
     (plugin_dir / "src").mkdir()
     (plugin_dir / "src" / "main.py").write_text("x")
-    # 用户手动 entry（与 deduce 同名）+ 旧 derived vendor
+    # 用户手动 entry（与 deduce 同名）
     b.add_file("src/main.py", ["entry"])
-    b.add_dir("vendor", derived=True)
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
                       compile_cfg={"manifest": "pyproject.toml",
                                    "self_contained": False})
@@ -405,7 +441,6 @@ def test_sync_derived_demotes_wrong_manual_entry(make_project, make_ctx):
     (plugin_dir / "src" / "main.py").write_text("x")
     (plugin_dir / "main.py").write_text("x")
     b.add_file("main.py", ["entry"])
-    b.add_dir("vendor", derived=True)
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
                       compile_cfg={"manifest": "pyproject.toml",
                                    "self_contained": False})

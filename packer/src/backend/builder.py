@@ -73,23 +73,46 @@ def evaluate_pattern(workdir: Path, pattern: str) -> list[str]:
 
 
 class Builder:
-    """阶段 2 输入视图：统一文件选择列表（任何来源可添加）+ 发布选项。"""
+    """阶段 2 输入视图：统一文件选择列表（任何来源可添加）+ 发布选项。
+
+    打包内容 = 手动条目（持久化于 project.json）+ deduced 编译产物
+    （运行时注入，不落盘——总能从编译设置重新推导）。
+    """
 
     def __init__(self, pm: ProjectManager) -> None:
         self._pm = pm
         self._no_zip_override: bool | None = None  # 调试 folder 内存覆盖（不落盘）
+        self._deduced: list[BuilderItem] = []  # deduce 结果（派生视图，不持久化）
 
     # ------------------------------------------------------------------
-    # 打包内容（用户 / 编译 / 任何来源均通过同一接口添加条目）
+    # 打包内容（手动条目持久化；deduced 条目运行时注入）
     # ------------------------------------------------------------------
 
     def _files(self) -> list[BuilderItem]:
+        """手动条目（project.json）；旧版 derived/auto 残留读时忽略。"""
         return [BuilderItem.from_dict(d)
-                for d in self._pm.read_builder_files()]
+                for d in self._pm.read_builder_files()
+                if not d.get("derived") and "auto" not in d.get("tags", [])]
 
     def _save(self, files: list[BuilderItem]) -> None:
-        self._pm.write_builder_files(
-            [f.to_dict() for f in files])
+        """落盘：derived / 废弃 auto 条目不持久化（仅手动条目）。"""
+        self._pm.write_builder_files([
+            f.to_dict() for f in files
+            if not f.derived and "auto" not in f.tags])
+
+    def set_deduced(self, items: list[BuilderItem]) -> None:
+        """注入 deduce 结果（派生视图，仅内存——可随时从编译设置重建）。"""
+        self._deduced = list(items)
+
+    def prune_persisted(self) -> None:
+        """清理 project.json 中过期的 derived/auto 残留（一次性迁移）。
+
+        旧版把 deduced 条目落盘；新模型读时已忽略，此处落盘清洗。
+        """
+        self._save(self._files())
+
+    def deduced_items(self) -> list[BuilderItem]:
+        return list(self._deduced)
 
     def add_file(self, rel: str,
                  tags: list[str] | None = None,
@@ -114,30 +137,25 @@ class Builder:
         self._save(files)
 
     def remove_derived(self) -> int:
-        """移除所有编译产物条目（derived 或废弃 auto 标签），返回移除数量。
-
-        ``auto`` 标签是 0.13 之前自动推断条目的标记（机制已废弃），
-        旧项目升级后残留——构建时一并清理（一次性迁移）。
-        """
-        files = self._files()
-        kept = [it for it in files
-                if not it.derived and "auto" not in it.tags]
-        n = len(files) - len(kept)
-        if n:
-            self._save(kept)
+        """清除 deduced 视图（编译产物条目），返回移除数量。"""
+        n = len(self._deduced)
+        self._deduced = []
         return n
 
     def remove_item(self, idx: int) -> None:
+        """删除条目（视图索引）——deduced 只读，仅手动条目可删。"""
         files = self._files()
-        if 0 <= idx < len(files):
-            files.pop(idx)
+        mi = idx - len(self._deduced)
+        if 0 <= mi < len(files):
+            files.pop(mi)
             self._save(files)
 
     def set_tags(self, idx: int, tags: list[str]) -> None:
-        """贴/改标签（如标为 entry）。"""
+        """贴/改标签（如标为 entry）——视图索引，deduced 条目只读。"""
         files = self._files()
-        if 0 <= idx < len(files):
-            files[idx].tags = list(tags)
+        mi = idx - len(self._deduced)
+        if 0 <= mi < len(files):
+            files[mi].tags = list(tags)
             self._save(files)
 
     def strip_tag(self, tag: str) -> int:
@@ -157,10 +175,11 @@ class Builder:
         return n
 
     def set_path(self, idx: int, rel: str) -> None:
-        """替换条目路径（保持类型与标签不变）。"""
+        """替换条目路径（保持类型与标签不变）——视图索引，deduced 只读。"""
         files = self._files()
-        if 0 <= idx < len(files):
-            item = files[idx]
+        mi = idx - len(self._deduced)
+        if 0 <= mi < len(files):
+            item = files[mi]
             if item.path is not None:
                 item.path = rel
             elif item.dir is not None:
@@ -170,12 +189,11 @@ class Builder:
             self._save(files)
 
     def items(self) -> list[BuilderItem]:
-        """条目列表：编译产物（derived）优先显示，其余保持添加顺序。
+        """条目列表：deduced（编译产物，视图在前）+ 手动条目。
 
-        稳定排序——derived 条目组内保持原顺序；交互索引与显示一致。
+        deduced 顺序即 deduce 返回顺序（入口在前）；手动保持添加顺序。
         """
-        return sorted(self._files(),
-                      key=lambda it: it.derived, reverse=True)
+        return self._deduced + self._files()
 
     # ------------------------------------------------------------------
     # 发布选项（发布形态固定 zip；folder 仅调试用内存覆盖，不落盘）

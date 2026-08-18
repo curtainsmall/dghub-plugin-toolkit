@@ -52,6 +52,7 @@ class BuildTab(ctk.CTkFrame):
         self._controls: list[ctk.CTkBaseClass] = []
         self._error_rels: set[str] = set()  # 校验失败的条目相对路径
         self._area_error: str = ""          # 区域级错误（如缺少入口）
+        self._builder_obj: Builder | None = None  # 持久的 Builder 实例（含 deduced 视图）
 
         self._build_ui()
         self._set_enabled(False)
@@ -180,7 +181,14 @@ class BuildTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _builder(self) -> Builder | None:
-        return Builder(self._pm) if self._pm else None
+        """持久的 Builder 实例（deduced 视图在内存，需跨操作保留）。"""
+        if self._builder_obj is None and self._pm is not None:
+            self._builder_obj = Builder(self._pm)
+        return self._builder_obj
+
+    def get_builder(self) -> Builder | None:
+        """供 app 组装 BuildContext（与列表共用同一实例，含 deduced 视图）。"""
+        return self._builder()
 
     def _add_files(self) -> None:
         """常规文件选择器：多选文件（必须位于项目根内）。"""
@@ -598,9 +606,13 @@ class BuildTab(ctk.CTkFrame):
         self._refresh_preview()
 
     def set_plugin_dir(self, d: str, pm: ProjectManager | None = None) -> None:
-        if pm:
+        if pm and self._pm is not pm:
             self._pm = pm
+            self._builder_obj = None  # 新项目：重建 Builder（deduced 由加载流程注入）
         self._plugin_dir = d
+        b = self._builder()
+        if b is not None:
+            b.prune_persisted()  # 清理旧版 derived/auto 落盘残留（迁移）
         self._set_enabled(True)
         self._error_rels = set()  # 新项目清除旧错误高亮
         self._area_error = ""

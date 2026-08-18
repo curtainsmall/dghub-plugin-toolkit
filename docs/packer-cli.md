@@ -42,8 +42,7 @@ dgpacker-cli --version
   },
   "builder": {
     "files": [
-      { "path": "my-plugin.exe", "tags": ["entry"], "derived": true },
-      { "dir": "_internal", "derived": true },
+      { "path": "assets/logo.png" },
       { "dir": "assets" }
     ],
     "output_dir": "",
@@ -72,9 +71,11 @@ dgpacker-cli --version
 | `packer_name` | string | 自定义包名（空 = 插件目录名） |
 
 **files 条目**：`path` / `dir` / `pattern` 三选一；`tags` 可含 `"entry"`
-（入口标记，恰好一个，缺失/重复校验报错）；编译产物条目带 `derived: true`
-（自动声明，勿手工维护——构建前按 deduce 重建，旧版 `auto` 标签条目一并
-清理）。
+（入口标记，恰好一个，缺失/重复校验报错）。**编译产物条目（exe /
+`_internal` / `node_modules` / `vendor` 等）不落盘**——总能从编译设置
+（`compile_system` + `manifest` + `self_contained`）推导，运行时注入
+视图，`project.json` 只保存手动打包内容；旧版残留的 `derived` /
+`auto` 条目在加载时自动清理。
 
 编译入口不在 project.json：Python 由 `pyproject.toml` 的 `[tool.dghub].entry`
 声明，Node.js 由 `package.json` 的 `main` 字段声明，CLI 构建时直接读取。

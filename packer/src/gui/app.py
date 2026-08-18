@@ -433,7 +433,7 @@ class App(ctk.CTk):
             output_dir=Path(self._output_dir) if self._output_dir else plugin_dir / "output",
             plugin_name=plugin_dir.name,
             compile_system=compile_view.get_compile_system(),
-            builder=Builder(self._pm) if self._pm else Builder(
+            builder=self._dist_view.get_builder() or Builder(
                 ProjectManager(str(plugin_dir))),
             log=self._logger,
             pm=self._pm,
