@@ -612,11 +612,13 @@ class BuildTab(ctk.CTkFrame):
         if self._pm:
             b = self._builder()
             name = b.get_packer_name() if b else ""
+            # placeholder 显示默认包名（插件目录名）
+            self._name_entry.configure(placeholder_text=Path(d).name)
             self._name_entry.delete(0, "end")
             if name:
                 self._name_entry.insert(0, name)
-            elif not self._name_entry._placeholder_text_active:
-                # 聚焦残留时 delete 不自动激活 placeholder，强制恢复显示
+            else:
+                # 无自定义包名：重新激活 placeholder 刷新默认包名显示
                 self._name_entry._activate_placeholder()
             self._refresh_item_list()
         self._refresh_preview()
