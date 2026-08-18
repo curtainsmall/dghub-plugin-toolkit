@@ -230,7 +230,7 @@ class SettingsTab(ctk.CTkFrame):
         ctk.CTkLabel(build_frame, text="自包含后缀:").grid(
             row=3, column=0, sticky="w", padx=(10, 5), pady=(0, 4))
         self._suffix_exe_entry = ctk.CTkEntry(
-            build_frame, width=220, placeholder_text="-self-contained")
+            build_frame, width=220, placeholder_text="-self_contained")
         self._suffix_exe_entry._is_focused = False
         self._suffix_exe_entry.grid(row=3, column=1, sticky="w",
                                     padx=5, pady=(0, 4))

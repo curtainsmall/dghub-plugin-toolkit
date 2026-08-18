@@ -278,7 +278,7 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 
 `manifest.entry` 相应为 `<插件名>.exe`（自包含）或 `start_node.py`
 （依赖版）——两者都是宿主已支持的 entry 类型。构建页「按产物模式加后缀」
-checkbox 开启时，包名自动追加 `-self-contained` 或 `-dependent` 后缀
+checkbox 开启时，包名自动追加 `-self_contained` 或 `-dependent` 后缀
 （可在设置页自定义后缀文本）。
 
 ### 插件作者须知

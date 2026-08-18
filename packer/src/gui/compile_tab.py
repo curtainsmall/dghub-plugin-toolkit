@@ -254,13 +254,13 @@ class CompileTab(ctk.CTkFrame):
         self._cmd_frame.grid_remove()
         self._none_frame.grid_remove()
         if cid in ("python", "node"):
-            # Node 与 Python 共用依赖清单区；Node 显示产物模式、隐藏预检行
-            if cid == "node":
+            # Python 与 Node 共用依赖清单区与「自包含」模式区；
+            # PyInstaller 预检仅自包含 Python 显示（依赖版不需要）
+            if cid == "node" or not self._bundle_var.get():
                 self._pyinstaller_hint.grid_remove()
-                self._bundle_frame.grid()
             else:
                 self._pyinstaller_hint.grid()
-                self._bundle_frame.grid_remove()
+            self._bundle_frame.grid()
             self._py_frame.grid()
         elif cid == "command":
             self._cmd_frame.grid()
@@ -302,7 +302,8 @@ class CompileTab(ctk.CTkFrame):
         self._check_pyinstaller_bg()
 
     def _on_bundle_toggled(self) -> None:
-        """自包含 checkbox 变化 → 保存。"""
+        """自包含 checkbox 变化 → 更新可见性并保存。"""
+        self._update_visibility()
         self._on_setting_changed()
 
     def _pick_compile_dir(self) -> None:
@@ -335,6 +336,10 @@ class CompileTab(ctk.CTkFrame):
 
     def _check_pyinstaller_bg(self) -> None:
         if self._compile_id() != "python":
+            return
+        if not self._bundle_var.get():
+            # 依赖版不需要 PyInstaller（跳过预检）
+            self._pyinstaller_hint.configure(text="")
             return
         threading.Thread(target=self._check_pyinstaller_work,
                          daemon=True).start()

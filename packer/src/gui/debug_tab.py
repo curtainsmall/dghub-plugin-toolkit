@@ -240,7 +240,9 @@ class DebugTab(ctk.CTkFrame):
         project = self._pm.read_project() if self._pm else {}
         compile_system = project.get("compiler", {}).get("compile_system", "")
         if compile_system == "python":
-            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
+            compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", ""),
+                           "self_contained": project.get("compiler", {}).get("self_contained", True),
+                           "auto_suffix": project.get("compiler", {}).get("auto_suffix", False)}
         elif compile_system == "node":
             compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", ""),
                            "self_contained": project.get("compiler", {}).get("self_contained", True),
@@ -284,6 +286,19 @@ class DebugTab(ctk.CTkFrame):
             if entry is None:
                 self._logger.error(f"未找到调试入口: {artifact}")
                 return
+            # SDK manifest 定位约定（agent.py manifest_dir 三档解析）：
+            # 依赖版源码态帧解析偏移（vendor 内），注入产物根兜底
+            env["DGHUB_MANIFEST_DIR"] = str(artifact)
+            # 模拟宿主协议（PLUGIN_DEVELOPMENT.md：.py 入口可导入 entry
+            # 所在目录、插件根、插件根 vendor/）——依赖版调试直跑源码入口
+            if str(entry).lower().endswith(".py"):
+                paths = [str(entry.parent), str(artifact),
+                         str(artifact / "vendor")]
+                merged = os.pathsep.join(
+                    p for p in paths if Path(p).is_dir())
+                old = env.get("PYTHONPATH", "")
+                env["PYTHONPATH"] = (merged + os.pathsep + old
+                                     if merged and old else merged or old)
             self._logger.info(f"运行产物: {entry}")
             self.after(0, lambda: self._set_status(
                 "运行中", ("#2E7D32", "#4CAF50")))

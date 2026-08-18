@@ -93,7 +93,7 @@ class BuildTab(ctk.CTkFrame):
         # 统一修正为 False（等价 5.x 默认行为）
         self._name_entry._is_focused = False
         self._controls.append(self._name_entry)
-        # 按产物模式自动加后缀（exe → -self-contained / deps → -dependent，
+        # 按产物模式自动加后缀（exe → -self_contained / deps → -dependent，
         # 后缀文本可在设置页自定义）
         self._auto_suffix_var = ctk.BooleanVar(value=False)
         self._auto_suffix_check = ctk.CTkCheckBox(

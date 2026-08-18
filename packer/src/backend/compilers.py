@@ -184,9 +184,12 @@ _PY_MANIFESTS = ("pyproject.toml", "setup.py", "setup.cfg", "requirements*.txt")
 
 
 class PythonCompiler(Compiler):
-    """uv 按清单下载依赖到 .deps → PyInstaller onedir 打包（含 SDK 可选）。
+    """uv 按清单下载依赖 → 自包含 PyInstaller exe 或依赖版 vendor/。
 
     产物约定：``out_dir/<name>/`` onedir 树（固定位置，管线整树收集）。
+    self_contained=true（默认）：PyInstaller onedir（exe + _internal/）；
+    self_contained=false：依赖版——uv 装依赖到 vendor/，入口为
+    [tool.dghub].entry 源码（宿主本机 Python 运行，vendor/ 自动进导入路径）。
     """
 
     id = "python"
@@ -196,6 +199,8 @@ class PythonCompiler(Compiler):
     fields = {
         "manifest": {"label": "依赖清单", "type": "str",
                      "default": "", "required": True},
+        "self_contained": {"label": "自包含模式", "type": "bool",
+                           "default": True},
     }
 
     def enabled(self, cfg: dict[str, Any]) -> bool:
@@ -253,14 +258,30 @@ class PythonCompiler(Compiler):
                 source_dir: Path | None = None) -> list[BuilderItem] | None:
         """manifest 已选 → 推导编译产物条目（显式声明，derived 只读）。
 
-        - 入口 exe（<插件名>.exe，entry 标签）
-        - _internal/ 依赖目录（PyInstaller onedir 产物）
-        两者均为编译产出，构建时从产物树解析。
+        self_contained=true（默认）：入口 exe（<插件名>.exe）+ _internal/；
+        self_contained=false：入口 [tool.dghub].entry 源码（.py，宿主注入
+        vendor/ 导入路径）+ vendor/（derived）+ 入口目录。
         """
         if not cfg.get("manifest"):
             return None
         if not plugin_name:
             return None
+        if not cfg.get("self_contained", True):
+            # 依赖版：入口 = [tool.dghub].entry 相对路径（协议允许非根，
+            # 宿主对 .py 入口注入 entry 目录 / 插件根 / vendor/）
+            items: list[BuilderItem] = [BuilderItem(dir="vendor",
+                                                    derived=True)]
+            if source_dir is not None:
+                entry = read_tool_dghub_entry(
+                    source_dir / str(cfg.get("manifest", "")))
+                if entry:
+                    items.insert(0, BuilderItem(path=entry, tags=["entry"],
+                                                derived=True))
+                    entry_dir = str(Path(entry).parent)
+                    if entry_dir not in ("", "."):
+                        items.append(BuilderItem(dir=entry_dir,
+                                                 derived=True))
+            return items
         return [
             BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
                         derived=True),
@@ -280,6 +301,46 @@ class PythonCompiler(Compiler):
         if not manifest_path.is_file():
             ctx.log.error(f"依赖清单不存在: {manifest_path}")
             return False
+
+        # 依赖版（self_contained=false）：uv 装依赖到产物 vendor/，
+        # 入口直接指向 [tool.dghub].entry 源码（宿主对 .py 入口注入
+        # vendor/ 与入口目录），跳过 PyInstaller
+        if not ctx.cfg.get("self_contained", True):
+            prod_dir = ctx.output_dir / ".pyi" / ctx.plugin_name
+            vendor_dir = prod_dir / "vendor"
+            vendor_dir.mkdir(parents=True, exist_ok=True)
+            env = None
+            if ctx.pypi_index:
+                env = {**os.environ, "UV_DEFAULT_INDEX": ctx.pypi_index}
+                ctx.log.detail(f"使用 PyPI 镜像源: {ctx.pypi_index}")
+            ctx.log.info(f"依赖版产物：uv 安装依赖到 vendor/ ...")
+            ok = run_logged(
+                ["uv", "pip", "install", "--target", str(vendor_dir),
+                 "-r", str(manifest_path)],
+                ctx.log, "uv", cwd=ctx.source_dir,
+                env=env, canceller=ctx.canceller)
+            if not ok:
+                ctx.log.error("依赖安装失败")
+                return False
+            entry = read_tool_dghub_entry(manifest_path)
+            if not entry:
+                ctx.log.error("pyproject.toml 缺少 [tool.dghub].entry"
+                              "（Python 编译入口）")
+                return False
+            # 入口所在目录随产物收集（src/ 等源码进产物树，与 Node 一致）
+            entry_dir = Path(entry).parent
+            if str(entry_dir) != ".":
+                src = ctx.source_dir / entry_dir
+                if src.is_dir():
+                    shutil.copytree(src, prod_dir / entry_dir,
+                                    dirs_exist_ok=True)
+            else:
+                src = ctx.source_dir / entry
+                if src.is_file():
+                    shutil.copy2(src, prod_dir / entry)
+            ctx.log.info("依赖版构建完成（入口源码 + vendor/，"
+                         "目标机需 Python 运行时）")
+            return True
 
         # 1) uv 按清单安装依赖到 .deps（中间产物，构建后清理）
         deps_dir = ctx.output_dir / ".deps"

@@ -122,12 +122,10 @@ def build_for_debug(ctx, manifest_data: dict) -> Path | None:
 def locate_debug_entry(ctx, artifact: Path) -> Path | None:
     """产物文件夹内定位插件入口。
 
-    Python 编译 = ``<插件名>.exe``；其余编译系统 = 打包内容 entry 条目
-    （arc 相对插件根，落在产物文件夹内）。
+    入口 = entry 标签条目（arc 相对插件根，落在产物文件夹内）——
+    Python 自包含为 <插件名>.exe、依赖版为 [tool.dghub].entry 源码；
+    Node 自包含为 SEA exe、依赖版为 start_node.py。
     """
-    if ctx.compile_system == "python":
-        exe = artifact / f"{ctx.plugin_name}.exe"
-        return exe if exe.is_file() else None
     item = ctx.builder.entry_item()
     if item is not None and item.path is not None:
         p = artifact / item.path

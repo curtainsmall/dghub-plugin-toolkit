@@ -80,11 +80,25 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
                 applied.append(f"{key} = {value}")
             ctx.pm.set_field("compiler", section)
 
-    # 2) deduce：建议编译产物条目（合并去重——已存在条目不重复添加；
-    #    entry 已存在（手动配置）时尊重现状，不重复推断入口，
-    #    但缺失的编译产物目录（node_modules / dist / _internal）照常补全）
+    # 2) deduce：建议编译产物条目（合并去重——已存在条目不重复添加）。
+    #    编译系统自持入口（exe / start_node.py / 依赖版源码）：与 deduced
+    #    不同名的旧 entry（含用户手动，如 main.py 直指源码）降级为普通
+    #    内容——绕过编译入口语义（依赖版缺 vendor 注入）；同名（依赖版
+    #    entry 即 [tool.dghub].entry 源码路径，非根相对路径合法）时尊重
+    #    现状不重复推断；无编译（deduce 无 entry）时同样尊重手动入口。
     items = ctx.builder.items()
-    has_entry = any("entry" in it.tags for it in items)
+    deduced = comp.deduce(ctx.compile_cfg, ctx.plugin_name, ctx.source_dir) or []
+    deduced_entries = [it for it in deduced if "entry" in it.tags]
+    existing_entry = next((it for it in items if "entry" in it.tags), None)
+    if deduced_entries and (
+            existing_entry is None
+            or existing_entry.path != deduced_entries[0].path):
+        demoted = ctx.builder.strip_tag("entry")
+        if demoted:
+            applied.append(f"入口让位: {demoted} 个旧入口条目降级为普通内容")
+        has_entry = False
+    else:
+        has_entry = existing_entry is not None
     existing: set[tuple[str, str]] = set()
     for it in items:
         if it.path is not None:
@@ -110,12 +124,48 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
     return applied
 
 
+def sync_derived(ctx: BuildContext) -> None:
+    """构建前同步 derived 条目：按当前 deduce 结果重建。
+
+    编译配置变化（self_contained 等）后旧 deduced 条目（exe entry /
+    start_node.py / 源码入口）会过时残留——以 deduce 为准清旧补新，
+    保留用户手动条目；编译系统自持入口时旧手动 entry 同名则尊重现状、
+    异名则降级（与 fill_builder 一致，见其 deduce 注释）。
+    """
+    comp = get_compiler(ctx.compile_system)
+    deduced = comp.deduce(ctx.compile_cfg, ctx.plugin_name,
+                          ctx.source_dir) or []
+    removed = ctx.builder.remove_derived()
+    if removed:
+        ctx.log.detail(f"刷新 {removed} 个编译产物条目")
+    deduced_entries = [it for it in deduced if "entry" in it.tags]
+    existing_entry = ctx.builder.entry_item()
+    if deduced_entries and (
+            existing_entry is None
+            or existing_entry.path != deduced_entries[0].path):
+        demoted = ctx.builder.strip_tag("entry")
+        if demoted:
+            ctx.log.detail(f"入口让位: {demoted} 个旧入口条目降级为普通内容")
+    has_entry = any("entry" in it.tags for it in ctx.builder.items())
+    for item in deduced:
+        if "entry" in item.tags and has_entry:
+            continue
+        if item.path is not None:
+            ctx.builder.add_file(item.path, item.tags,
+                                 derived=item.derived)
+        elif item.dir is not None:
+            ctx.builder.add_dir(item.dir, item.tags,
+                                derived=item.derived)
+
+
 def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Path | None:
     """执行两阶段构建并打包，返回产物路径；失败返回 None。
 
     校验失败（BuildError 语义）时返回 None，错误经 ctx.log 记录；
     收集阶段的缺失/冲突抛 ``BuildError``，由调用方（GUI）处理。
     """
+    # 构建前同步 derived 条目（模式/配置变化后旧条目过时）
+    sync_derived(ctx)
     errors = validate(ctx)
     if errors:
         for msg in errors:

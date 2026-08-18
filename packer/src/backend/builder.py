@@ -114,9 +114,14 @@ class Builder:
         self._save(files)
 
     def remove_derived(self) -> int:
-        """移除所有 derived（编译产物）条目，返回移除数量。"""
+        """移除所有编译产物条目（derived 或废弃 auto 标签），返回移除数量。
+
+        ``auto`` 标签是 0.13 之前自动推断条目的标记（机制已废弃），
+        旧项目升级后残留——构建时一并清理（一次性迁移）。
+        """
         files = self._files()
-        kept = [it for it in files if not it.derived]
+        kept = [it for it in files
+                if not it.derived and "auto" not in it.tags]
         n = len(files) - len(kept)
         if n:
             self._save(kept)
@@ -134,6 +139,22 @@ class Builder:
         if 0 <= idx < len(files):
             files[idx].tags = list(tags)
             self._save(files)
+
+    def strip_tag(self, tag: str) -> int:
+        """摘除所有条目上的指定标签（条目本身保留），返回受影响条数。
+
+        编译系统自持入口时用于「降级」手动 entry：旧入口条目保留为普通
+        打包内容，但不再充当 manifest.entry。
+        """
+        files = self._files()
+        n = 0
+        for it in files:
+            if tag in it.tags:
+                it.tags = [t for t in it.tags if t != tag]
+                n += 1
+        if n:
+            self._save(files)
+        return n
 
     def set_path(self, idx: int, rel: str) -> None:
         """替换条目路径（保持类型与标签不变）。"""

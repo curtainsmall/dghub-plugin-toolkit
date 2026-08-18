@@ -9,7 +9,7 @@ from backend.builder import BuildError, evaluate_pattern
 from backend.debug_runner import resolve_run_command
 from backend.packaging import (package_plugin, cleanup_intermediates,
                                resolve_packer_name)
-from backend.pipeline import fill_builder, run_build, validate
+from backend.pipeline import fill_builder, run_build, sync_derived, validate
 from backend.compilers import COMPILERS, get_compiler
 from backend.py_compiler import (_scan_ns_hidden_imports,
                                   _scan_toplevel_packages)
@@ -134,6 +134,28 @@ def test_python_compiler_deduce(make_project):
     assert cmd.deduce({"compile": "x"}, "my-plugin") is None
 
 
+def test_python_compiler_deduce_dependent(make_project):
+    """Python 依赖版（self_contained=false）：源码入口 + vendor/ + 入口目录。"""
+    py = get_compiler("python")
+    pm, _, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        '[tool.dghub]\nentry="src/main.py"\n')
+    items = py.deduce({"manifest": "pyproject.toml",
+                       "self_contained": False}, "my-plugin", plugin_dir)
+    assert [i.to_dict() for i in items] == [
+        {"path": "src/main.py", "tags": ["entry"], "derived": True},
+        {"dir": "vendor", "derived": True},
+        {"dir": "src", "derived": True}]
+    # 入口在根 → 入口文件条目（无入口目录）
+    (plugin_dir / "pyproject.toml").write_text(
+        '[tool.dghub]\nentry="main.py"\n')
+    items = py.deduce({"manifest": "pyproject.toml",
+                       "self_contained": False}, "my-plugin", plugin_dir)
+    assert [i.to_dict() for i in items] == [
+        {"path": "main.py", "tags": ["entry"], "derived": True},
+        {"dir": "vendor", "derived": True}]
+
+
 def test_python_compiler_manifest_known():
     py = get_compiler("python")
     # 仅 pyproject.toml（唯一可声明 [tool.dghub].entry 的清单）
@@ -210,12 +232,12 @@ def test_resolve_packer_name_suffix(make_project, make_ctx):
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
                       compile_cfg={"manifest": "package.json"})
     assert resolve_packer_name(ctx, {}) == "my-pack"
-    # self_contained=True + auto_suffix → -self-contained
+    # self_contained=True + auto_suffix → -self_contained
     ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
                        compile_cfg={"manifest": "package.json",
                                     "self_contained": True,
                                     "auto_suffix": True})
-    assert resolve_packer_name(ctx2, {}) == "my-pack-self-contained"
+    assert resolve_packer_name(ctx2, {}) == "my-pack-self_contained"
     # self_contained=False + auto_suffix → -dependent
     ctx3, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
                        compile_cfg={"manifest": "package.json",
@@ -295,12 +317,107 @@ def test_fill_builder_merges_deduced(make_project, make_ctx):
                       compile_cfg={"manifest": "package.json"})
     applied = fill_builder(ctx)
     items = b.items()
-    # entry 不被重复推断（仍只有用户那个）
+    # 编译系统自持入口：手动 entry 降级，deduced entry（默认自包含 exe）接管
     entries = [i for i in items if "entry" in i.tags]
-    assert len(entries) == 1 and entries[0].path == "my-entry.js"
+    assert len(entries) == 1 and entries[0].path == "testplugin.exe"
+    assert entries[0].derived
+    manual = [i for i in items if i.path == "my-entry.js"]
+    assert len(manual) == 1 and "entry" not in manual[0].tags
+    assert not manual[0].derived  # 条目保留，仅摘 entry 标签
     # 缺失的 node_modules / dist 被补上
     dirs = sorted(i.dir for i in items if i.dir)
     assert dirs == ["dist", "node_modules"]
+
+
+def test_sync_derived_rebuilds_on_mode_change(make_project, make_ctx):
+    """sync_derived：模式切换后旧 derived 条目（exe entry）按 deduce 重建。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        "[tool.dghub]\nentry='main.py'\n")
+    (plugin_dir / "main.py").write_text("x")
+    # 旧状态：自包含 derived 条目（exe entry + _internal）
+    b.add_file("tetris-py.exe", ["entry"], derived=True)
+    b.add_dir("_internal", derived=True)
+    # 手动条目保留
+    b.add_file("notes.txt")
+    # 切到依赖版后 sync
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                      compile_cfg={"manifest": "pyproject.toml",
+                                   "self_contained": False})
+    sync_derived(ctx)
+    items = b.items()
+    def key(i):
+        d = i.to_dict()
+        return d.get("path") or d.get("dir")
+    got = sorted((key(i), tuple(i.tags), i.derived) for i in items)
+    assert got == [
+        ("main.py", ("entry",), True),
+        ("notes.txt", (), False),
+        ("vendor", (), True),
+    ]
+    # 再切回自包含 → exe + _internal 恢复（依赖版 .py entry 被清）
+    ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                       compile_cfg={"manifest": "pyproject.toml",
+                                    "self_contained": True})
+    sync_derived(ctx2)
+    items = b.items()
+    got = sorted((key(i), tuple(i.tags), i.derived) for i in items)
+    assert got == [
+        ("_internal", (), True),
+        ("notes.txt", (), False),
+        (f"{plugin_dir.name}.exe", ("entry",), True),
+    ]
+
+
+def test_sync_derived_keeps_matching_manual_entry(make_project, make_ctx):
+    """同名手动 entry（src/main.py，非根相对路径合法）被尊重保留，
+    依赖版入口即 [tool.dghub].entry 源码，无需 bootstrap。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        "[tool.dghub]\nentry='src/main.py'\n")
+    (plugin_dir / "src").mkdir()
+    (plugin_dir / "src" / "main.py").write_text("x")
+    # 用户手动 entry（与 deduce 同名）+ 旧 derived vendor
+    b.add_file("src/main.py", ["entry"])
+    b.add_dir("vendor", derived=True)
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                      compile_cfg={"manifest": "pyproject.toml",
+                                   "self_contained": False})
+    sync_derived(ctx)
+    items = b.items()
+    # 手动条目继续充当入口（不重复推断、不降级）
+    entries = [i for i in items if "entry" in i.tags]
+    assert len(entries) == 1 and entries[0].path == "src/main.py"
+    assert not entries[0].derived
+    # vendor / 入口目录重建为 derived
+    vendor = [i for i in items if i.dir == "vendor"]
+    assert len(vendor) == 1 and vendor[0].derived
+    src = [i for i in items if i.dir == "src"]
+    assert len(src) == 1 and src[0].derived
+
+
+def test_sync_derived_demotes_wrong_manual_entry(make_project, make_ctx):
+    """异名手动 entry（main.py ≠ deduced src/main.py）降级，deduced 入口接管。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        "[tool.dghub]\nentry='src/main.py'\n")
+    (plugin_dir / "src").mkdir()
+    (plugin_dir / "src" / "main.py").write_text("x")
+    (plugin_dir / "main.py").write_text("x")
+    b.add_file("main.py", ["entry"])
+    b.add_dir("vendor", derived=True)
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                      compile_cfg={"manifest": "pyproject.toml",
+                                   "self_contained": False})
+    sync_derived(ctx)
+    items = b.items()
+    entries = [i for i in items if "entry" in i.tags]
+    assert len(entries) == 1 and entries[0].path == "src/main.py"
+    assert entries[0].derived
+    # 旧手动 main.py 保留为普通内容
+    manual = [i for i in items if i.path == "main.py"]
+    assert len(manual) == 1 and "entry" not in manual[0].tags
+    assert not manual[0].derived
 
 
 def test_run_build_no_compile(make_project, make_ctx):

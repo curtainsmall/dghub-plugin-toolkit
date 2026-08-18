@@ -32,7 +32,7 @@ _PACKER_NAME_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 # 按产物模式自动追加的包名后缀（compiler.auto_suffix 开启时）；
 # 默认值，可在设置页自定义
 _DEFAULT_SUFFIXES = {
-    "exe": "-self-contained",
+    "exe": "-self_contained",
     "deps": "-dependent",
 }
 
@@ -59,7 +59,7 @@ def resolve_packer_name(ctx: Any, manifest_data: dict[str, Any]) -> str:
 
     显式包名非法（非安全字符）时视为未提供，回退插件目录名。
     compiler.auto_suffix 开启时按产物模式追加后缀（exe →
-    -self-contained / deps → -dependent）——仅影响最终产物名
+    -self_contained / deps → -dependent）——仅影响最终产物名
     （zip / 调试目录），编译产物名不变。
     """
     name = ""
@@ -92,6 +92,14 @@ def package_plugin(ctx: Any, manifest_data: dict[str, Any],
 
     if no_zip:
         folder_dir = ctx.output_dir / packer_name
+        if folder_dir.is_dir():
+            # 清空旧目录内容（合并覆盖会残留旧构建文件，如已废弃的
+            # start.py bootstrap），保证目录产物与本次条目一致
+            for old in folder_dir.iterdir():
+                if old.is_dir():
+                    shutil.rmtree(old, ignore_errors=True)
+                else:
+                    old.unlink(missing_ok=True)
         folder_dir.mkdir(parents=True, exist_ok=True)
         (folder_dir / "manifest.json").write_text(
             manifest_json, encoding="utf-8")
