@@ -12,6 +12,7 @@ from typing import Any, Callable
 import customtkinter as ctk
 
 from backend.builder import Builder, evaluate_pattern
+from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
 from gui.widgets import center_dialog, reset_entry_border
 
@@ -84,7 +85,7 @@ class BuildTab(ctk.CTkFrame):
         self._name_entry = ctk.CTkEntry(
             left, placeholder_text="留空使用插件目录名",
             font=ctk.CTkFont(size=11))
-        self._name_entry.grid(row=0, column=1, columnspan=3, sticky="ew",
+        self._name_entry.grid(row=0, column=1, columnspan=2, sticky="ew",
                               padx=(5, 10), pady=(16, 5))
         self._name_entry.bind("<FocusOut>", lambda _: self._save_packer_name())
         self._name_entry.bind("<Return>", lambda _: self._save_packer_name())
@@ -92,6 +93,16 @@ class BuildTab(ctk.CTkFrame):
         # 统一修正为 False（等价 5.x 默认行为）
         self._name_entry._is_focused = False
         self._controls.append(self._name_entry)
+        # 按产物模式自动加后缀（exe → -self-contained / deps → -dependent，
+        # 后缀文本可在设置页自定义）
+        self._auto_suffix_var = ctk.BooleanVar(value=False)
+        self._auto_suffix_check = ctk.CTkCheckBox(
+            left, text="按产物模式加后缀",
+            variable=self._auto_suffix_var,
+            command=self._on_auto_suffix_toggled)
+        self._auto_suffix_check.grid(row=0, column=3, sticky="w",
+                                     padx=(5, 10), pady=(16, 5))
+        self._controls.append(self._auto_suffix_check)
 
         # 打包内容：添加文件/目录/规则 = 系统选择器入口
         ctk.CTkLabel(left, text="打包内容", width=_LABEL_W, anchor="w",
@@ -620,6 +631,9 @@ class BuildTab(ctk.CTkFrame):
             else:
                 # 无自定义包名：重新激活 placeholder 刷新默认包名显示
                 self._name_entry._activate_placeholder()
+            self._auto_suffix_var.set(bool(
+                self._pm.read_project().get("compiler", {})
+                .get("auto_suffix", False)))
             self._refresh_item_list()
         self._refresh_preview()
 
@@ -629,6 +643,16 @@ class BuildTab(ctk.CTkFrame):
         if b is None:
             return
         b.set_packer_name(self._name_entry.get().strip())
+        self._refresh_preview()
+
+    def _on_auto_suffix_toggled(self) -> None:
+        """自动后缀开关变化 → 保存并刷新预览。"""
+        if self._loading or not self._pm:
+            return
+        project = self._pm.read_project()
+        compiler = project.setdefault("compiler", {})
+        compiler["auto_suffix"] = bool(self._auto_suffix_var.get())
+        self._pm.write_project(project)
         self._refresh_preview()
 
     def save_settings(self) -> None:
@@ -683,6 +707,10 @@ class BuildTab(ctk.CTkFrame):
         entry = "未设置"
         b = self._builder()
         packer_name = (b.get_packer_name() if b else "") or plugin_name
+        # 与 resolve_packer_name 一致：auto_suffix 开启时按产物模式追加
+        project = self._pm.read_project() if self._pm else {}
+        compiler = project.get("compiler", {}) if isinstance(project, dict) else {}
+        packer_name += pack_suffix(compiler)
         lines.append(f"  {packer_name}.zip  ← 压缩包")
 
         # 树行：先收集再绘制——最后一行用 L 形转角（└──），其余用 ├──

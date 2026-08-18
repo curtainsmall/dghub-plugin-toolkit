@@ -29,11 +29,37 @@ def cleanup_intermediates(output_dir: Path, plugin_name: str,
 
 _PACKER_NAME_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
+# 按产物模式自动追加的包名后缀（compiler.auto_suffix 开启时）；
+# 默认值，可在设置页自定义
+_DEFAULT_SUFFIXES = {
+    "exe": "-self-contained",
+    "deps": "-dependent",
+}
+
+
+def pack_suffix(compile_cfg: dict[str, Any] | None) -> str:
+    """auto_suffix 开启时按产物模式返回后缀；否则空串。
+
+    后缀文本来自全局设置（pack_suffixes），可自定义；非法字符
+    （非 [A-Za-z0-9_-]）回退默认值。
+    """
+    if not (compile_cfg or {}).get("auto_suffix"):
+        return ""
+    bundle = compile_cfg.get("bundle", "exe")
+    default = _DEFAULT_SUFFIXES.get(bundle, "")
+    from backend import settings_store
+    saved = settings_store.get_state("pack_suffixes", {})
+    suffix = (saved or {}).get(bundle, "") or default
+    return suffix if _PACKER_NAME_RE.match(suffix) else default
+
 
 def resolve_packer_name(ctx: Any, manifest_data: dict[str, Any]) -> str:
     """包名解析：显式包名（构建页「包名」）> 插件目录名（默认）。
 
     显式包名非法（非安全字符）时视为未提供，回退插件目录名。
+    compiler.auto_suffix 开启时按产物模式追加后缀（exe →
+    -self-contained / deps → -dependent）——仅影响最终产物名
+    （zip / 调试目录），编译产物名不变。
     """
     name = ""
     builder = getattr(ctx, "builder", None)
@@ -43,7 +69,8 @@ def resolve_packer_name(ctx: Any, manifest_data: dict[str, Any]) -> str:
         name = ""
     if not name:
         name = ctx.plugin_name
-    return name
+    compile_cfg = getattr(ctx, "compile_cfg", None) or {}
+    return name + pack_suffix(compile_cfg)
 
 
 def package_plugin(ctx: Any, manifest_data: dict[str, Any],

@@ -52,9 +52,11 @@ class SettingsTab(ctk.CTkFrame):
 
     def __init__(self, master: Any,
                  on_pypi_index_changed: Callable[[str], None] | None = None,
+                 on_suffix_changed: Callable[[], None] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
         self._on_pypi_index_changed = on_pypi_index_changed
+        self._on_suffix_changed_cb = on_suffix_changed
         self._host_var = ctk.StringVar(value=self._DEFAULT_HOST)
         self._port_var = ctk.StringVar(value=self._DEFAULT_PORT)
         # 更新状态（自动检查外部触发时填充）
@@ -138,12 +140,18 @@ class SettingsTab(ctk.CTkFrame):
 
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        # 内容过长：整体放入滚动容器
+        self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._scroll.grid(row=0, column=0, sticky="nsew")
+        self._scroll.grid_columnconfigure(0, weight=1)
 
         row = 0
 
         # -- App Info --
-        info_frame = ctk.CTkFrame(self)
-        info_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=(10, 5))
+        info_frame = ctk.CTkFrame(self._scroll)
+        info_frame.grid(row=row, column=0, sticky="ew",
+                        padx=10, pady=(2, 5))
         info_frame.grid_columnconfigure(1, weight=1)
         row += 1
 
@@ -171,25 +179,8 @@ class SettingsTab(ctk.CTkFrame):
                 text="开发版本不支持检查更新",
                 text_color=("gray30", "gray70"))
 
-        # -- Links --
-        link_frame = ctk.CTkFrame(self)
-        link_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
-        link_frame.grid_columnconfigure(1, weight=1)
-        row += 1
-
-        ctk.CTkLabel(link_frame, text="相关链接",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
-
-        ctk.CTkButton(link_frame, text="🌐 GitHub 仓库",
-                      command=lambda: webbrowser.open(GITHUB_URL),
-                      width=200).grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        ctk.CTkButton(link_frame, text="🌐 DGHub 官网",
-                      command=lambda: webbrowser.open(DGHUB_URL),
-                      width=200).grid(row=2, column=0, padx=10, pady=5, sticky="w")
-
         # -- Theme --
-        theme_frame = ctk.CTkFrame(self)
+        theme_frame = ctk.CTkFrame(self._scroll)
         theme_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -207,7 +198,7 @@ class SettingsTab(ctk.CTkFrame):
         ctk.set_appearance_mode("dark")
 
         # -- Build (PyPI index) --
-        build_frame = ctk.CTkFrame(self)
+        build_frame = ctk.CTkFrame(self._scroll)
         build_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -233,8 +224,39 @@ class SettingsTab(ctk.CTkFrame):
         ).grid(row=2, column=0, columnspan=2, sticky="w",
                padx=10, pady=(0, 10))
 
+        # 产物名后缀（构建页开启「按产物模式加后缀」时使用；
+        # 留空 = 默认值，placeholder 提示；不传 textvariable——
+        # customtkinter 6.x 传自定义 variable 时 placeholder 无法激活）
+        ctk.CTkLabel(build_frame, text="自包含后缀:").grid(
+            row=3, column=0, sticky="w", padx=(10, 5), pady=(0, 4))
+        self._suffix_exe_entry = ctk.CTkEntry(
+            build_frame, width=220, placeholder_text="-self-contained")
+        self._suffix_exe_entry._is_focused = False
+        self._suffix_exe_entry.grid(row=3, column=1, sticky="w",
+                                    padx=5, pady=(0, 4))
+        self._suffix_exe_entry.bind("<KeyRelease>", self._on_suffix_changed)
+
+        ctk.CTkLabel(build_frame, text="依赖版后缀:").grid(
+            row=4, column=0, sticky="w", padx=(10, 5), pady=(0, 4))
+        self._suffix_deps_entry = ctk.CTkEntry(
+            build_frame, width=220, placeholder_text="-dependent")
+        self._suffix_deps_entry._is_focused = False
+        self._suffix_deps_entry.grid(row=4, column=1, sticky="w",
+                                     padx=5, pady=(0, 4))
+        self._suffix_deps_entry.bind("<KeyRelease>", self._on_suffix_changed)
+
+        ctk.CTkLabel(
+            build_frame,
+            text="「按产物模式加后缀」开启时追加到包名的后缀（仅字母/数字/"
+                 "下划线/连字符）；留空使用默认值。",
+            font=ctk.CTkFont(size=12),
+            text_color=("gray30", "gray70"),
+            wraplength=600, justify="left",
+        ).grid(row=5, column=0, columnspan=2, sticky="w",
+               padx=10, pady=(0, 10))
+
         # -- Debug (DGHub host/port) --
-        runtime_frame = ctk.CTkFrame(self)
+        runtime_frame = ctk.CTkFrame(self._scroll)
         runtime_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -269,16 +291,19 @@ class SettingsTab(ctk.CTkFrame):
                padx=10, pady=(0, 10))
 
         # -- Reset defaults --
-        reset_frame = ctk.CTkFrame(self)
+        reset_frame = ctk.CTkFrame(self._scroll)
         reset_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
         ctk.CTkButton(reset_frame, text="恢复默认", width=120,
                       command=self._reset_defaults).grid(
             row=0, column=0, sticky="w", padx=10, pady=10)
+        ctk.CTkButton(reset_frame, text="打开配置目录", width=120,
+                      command=self._open_config_dir).grid(
+            row=0, column=1, sticky="w", padx=(0, 10), pady=10)
 
         # -- License --
-        license_frame = ctk.CTkFrame(self)
+        license_frame = ctk.CTkFrame(self._scroll)
         license_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -293,8 +318,21 @@ class SettingsTab(ctk.CTkFrame):
             wraplength=600, justify="left",
         ).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 10))
 
-        # push remaining space
-        self.grid_rowconfigure(row, weight=1)
+        # -- Links（置于页面底部）--
+        link_frame = ctk.CTkFrame(self._scroll)
+        link_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
+        row += 1
+
+        ctk.CTkLabel(link_frame, text="相关链接",
+                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
+
+        ctk.CTkButton(link_frame, text="🌐 GitHub 仓库",
+                      command=lambda: webbrowser.open(GITHUB_URL),
+                      width=200).grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkButton(link_frame, text="🌐 DGHub 官网",
+                      command=lambda: webbrowser.open(DGHUB_URL),
+                      width=200).grid(row=2, column=0, padx=10, pady=5, sticky="w")
 
     def _on_theme_changed(self, label: str) -> None:
         """外观模式选项变化 → 应用对应 customtkinter 值。"""
@@ -316,6 +354,14 @@ class SettingsTab(ctk.CTkFrame):
         self._port_var.set(self._DEFAULT_PORT)
         self._save_env()
 
+    def _open_config_dir(self) -> None:
+        """在文件管理器中打开全局配置目录（state.json 所在）。"""
+        path = settings_store.config_dir()
+        try:
+            os.startfile(str(path))  # Windows
+        except Exception:
+            webbrowser.open(path.as_uri())
+
     def _pypi_changed(self, _label: str) -> None:
         """镜像源选项变化时通知外部（实时保存）。"""
         if self._on_pypi_index_changed:
@@ -328,12 +374,31 @@ class SettingsTab(ctk.CTkFrame):
                 self._host_var.set(saved["host"])
             if saved.get("port") and saved["port"] != "8000":
                 self._port_var.set(saved["port"])
+        # 产物名后缀（设置页可自定义；非法/空回退默认）
+        suffixes = settings_store.get_state("pack_suffixes", {})
+        if isinstance(suffixes, dict):
+            if suffixes.get("exe"):
+                self._suffix_exe_entry.insert(0, suffixes["exe"])
+            if suffixes.get("deps"):
+                self._suffix_deps_entry.insert(0, suffixes["deps"])
 
     def _save_env(self) -> None:
         settings_store.save_state_key("debug_env", {
             "host": self._host_var.get().strip(),
             "port": self._port_var.get().strip(),
         })
+
+    def _on_suffix_changed(self, *args: Any) -> None:
+        """后缀输入变化（KeyRelease）→ 保存并通知外部刷新构建预览。
+
+        CTkEntry.get() 在 placeholder 激活时返回空串——留空即回退默认值。
+        """
+        settings_store.save_state_key("pack_suffixes", {
+            "exe": self._suffix_exe_entry.get(),
+            "deps": self._suffix_deps_entry.get(),
+        })
+        if self._on_suffix_changed_cb:
+            self._on_suffix_changed_cb()
 
     # -- update 状态机 --------------------------------------------------
 

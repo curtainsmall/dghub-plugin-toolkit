@@ -7,7 +7,8 @@ import pytest
 
 from backend.builder import BuildError, evaluate_pattern
 from backend.debug_runner import resolve_run_command
-from backend.packaging import package_plugin, cleanup_intermediates
+from backend.packaging import (package_plugin, cleanup_intermediates,
+                               resolve_packer_name)
 from backend.pipeline import fill_builder, run_build, validate
 from backend.compilers import COMPILERS, get_compiler
 from backend.py_compiler import (_scan_ns_hidden_imports,
@@ -202,6 +203,28 @@ def test_node_compiler_bundle_validate(make_project):
     assert any("产物模式" in e
                for e in node.validate({"manifest": "package.json",
                                        "bundle": "fat"}, plugin_dir))
+
+
+def test_resolve_packer_name_suffix(make_project, make_ctx):
+    """auto_suffix 开启时按产物模式追加后缀；关闭/缺省不加。"""
+    pm, b, plugin_dir = make_project()
+    b.set_packer_name("my-pack")
+    # 关闭（默认）：不变
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                      compile_cfg={"manifest": "package.json"})
+    assert resolve_packer_name(ctx, {}) == "my-pack"
+    # exe + auto_suffix → -self-contained
+    ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                       compile_cfg={"manifest": "package.json",
+                                    "bundle": "exe",
+                                    "auto_suffix": True})
+    assert resolve_packer_name(ctx2, {}) == "my-pack-self-contained"
+    # deps + auto_suffix → -dependent
+    ctx3, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                       compile_cfg={"manifest": "package.json",
+                                    "bundle": "deps",
+                                    "auto_suffix": True})
+    assert resolve_packer_name(ctx3, {}) == "my-pack-dependent"
 
 
 def test_resolve_run_command(tmp_path):

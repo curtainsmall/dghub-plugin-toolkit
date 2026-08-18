@@ -127,8 +127,8 @@ class CompileTab(ctk.CTkFrame):
         bundle_row.grid(row=0, column=1, sticky="w", padx=5)
         self._bundle_menu = ctk.CTkOptionMenu(
             bundle_row, width=220, values=[
-                "自包含（exe）",
-                "依赖版（deps）"],
+                "自包含",
+                "依赖版"],
             command=self._on_bundle_changed)
         self._bundle_menu.pack(side="left")
         self._bundle_hint_icon = ctk.CTkLabel(
@@ -138,9 +138,10 @@ class CompileTab(ctk.CTkFrame):
         self._controls.append(self._bundle_menu)
         self._bundle_hint_tip = ToolTip(
             self._bundle_hint_icon,
-            "自包含（exe）：打包 Node.js 运行时（SEA 注入），目标机无需安装 Node\n"
-            "依赖版（deps）：不打包运行时，目标机需安装 Node.js；"
+            "自包含：打包 Node.js 运行时（SEA 注入），目标机无需安装 Node\n"
+            "依赖版：不打包运行时，目标机需安装 Node.js；"
             "跳过 SEA 打包，无需 postject 等工具链")
+        self._controls.append(self._bundle_menu)
         self._bundle_frame.grid_remove()
 
 
@@ -388,8 +389,8 @@ class CompileTab(ctk.CTkFrame):
                 bundle = project.get("compiler", {}).get("bundle", "exe")
                 self._bundle_var.set(bundle if bundle in ("exe", "deps") else "exe")
                 self._bundle_menu.set(
-                    "依赖版（deps）" if bundle == "deps"
-                    else "自包含（exe）")
+                    "依赖版" if bundle == "deps"
+                    else "自包含")
                 self._compile_var.set(project.get("compiler", {}).get("command", ""))
                 rel_exec = project.get("compiler", {}).get("compile_dir", "")
                 self._compile_dir = (self._pm.to_absolute(rel_exec)

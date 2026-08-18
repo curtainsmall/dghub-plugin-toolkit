@@ -13,6 +13,11 @@ _STATE_DIR = Path.home() / ".dghub-sdk-packer"
 _STATE_FILE = _STATE_DIR / "state.json"
 
 
+def config_dir() -> Path:
+    """全局配置目录（state.json 所在；GUI 设置页「打开配置目录」用）。"""
+    return _STATE_DIR
+
+
 def read_state() -> dict:
     """读取全局状态文件（不存在或损坏返回空 dict）。"""
     try:

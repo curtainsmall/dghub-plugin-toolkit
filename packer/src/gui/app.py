@@ -103,7 +103,8 @@ class App(ctk.CTk):
         self._settings_view = SettingsTab(
             self._settings_tab,
             on_pypi_index_changed=lambda url: self._save_state_key(
-                "pypi_index", url))
+                "pypi_index", url),
+            on_suffix_changed=lambda: self._dist_view.refresh_preview())
         self._settings_view.pack(fill="both", expand=True)
 
         # -- bottom bar (cross-tab) --
