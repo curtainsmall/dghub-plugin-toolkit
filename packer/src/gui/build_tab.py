@@ -17,7 +17,7 @@ from backend.builder import Builder, evaluate_pattern
 from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
 from gui.compile_tab import CompileTab
-from gui.widgets import center_dialog, reset_entry_border
+from gui.widgets import FillScrollable, center_dialog, reset_entry_border
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -74,12 +74,18 @@ class BuildTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        self.grid_columnconfigure(0, weight=3)
-        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+        # 页面级滚动（内容填满视口，日志面板压缩时超高内容可滚动）
+        scroll = FillScrollable(self)
+        scroll.grid(row=0, column=0, sticky="nsew")
+        c = scroll.content
+        c.grid_columnconfigure(0, weight=3)
+        c.grid_columnconfigure(1, weight=2)
+        c.grid_rowconfigure(0, weight=1)
 
         # ---- 左栏：编译设置 + 打包内容 + 发布 ----
-        left = ctk.CTkFrame(self)
+        left = ctk.CTkFrame(c)
         left.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
         left.grid_columnconfigure(1, weight=1)
 
@@ -158,7 +164,7 @@ class BuildTab(ctk.CTkFrame):
         self._area_err_lbl.grid_remove()
 
         # ---- 右栏：发布选项 + 预览 ----
-        right = ctk.CTkFrame(self)
+        right = ctk.CTkFrame(c)
         right.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
         right.grid_columnconfigure(0, weight=1)
         right.grid_rowconfigure(3, weight=1)  # 弹性空间给预览 Textbox

@@ -67,15 +67,10 @@ class App(ctk.CTk):
         # -- top bar (cross-tab) --
         self._build_top_bar()
 
-        # -- tab view（置于可滚动容器：日志面板展开压缩视口时，
-        #    编辑内容按自然高度滚动访问，不被挤压）--
-        self._tab_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self._tab_scroll.grid(row=2, column=0, sticky="nsew",
-                              padx=10, pady=5)
-        self._tab_view = ctk.CTkTabview(self._tab_scroll, anchor="nw",
-                                        height=850,
-                                        command=self._on_tab_changed)
-        self._tab_view.pack(fill="both", expand=True)
+        # -- tab view（tab 导航固定；内容区占满顶部栏与日志面板之间，
+        #    页面内容 fill 视口，超高时由页面内部滚动自管）--
+        self._tab_view = ctk.CTkTabview(self, anchor="nw")
+        self._tab_view.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
 
         # -- tabs --
         self._info_tab = self._tab_view.add("信息")
@@ -123,9 +118,6 @@ class App(ctk.CTk):
 
         # -- auto-load last plugin dir --
         self._auto_open_last_plugin_dir()
-
-        # 首次显示即按当前 tab 内容收紧高度（避免信息页被默认高度拉高）
-        self._fit_tab_height()
 
         # 启动即检查更新（后台线程，不阻塞 UI）
         self._auto_check_update()
@@ -239,33 +231,8 @@ class App(ctk.CTk):
             self._logger.error(f"自动填充失败: {exc}")
 
     def _on_tab_changed(self, _tab: str = "") -> None:
-        """tab 高度自适应：按当前页面内容自然高度收紧 tabview 高度。
-
-        固定高度会让内容少的页面（信息/设置）内部被拉高、底部留白；
-        延迟一拍等新页面布局完成后再读取请求高度。
-        """
-        try:
-            self.after(30, self._fit_tab_height)
-        except Exception:
-            pass
-
-    def _fit_tab_height(self, _depth: int = 0) -> None:
-        """按当前页面内容自然高度收紧 tabview 高度（布局收敛，最多 5 拍）。
-
-        CTkTabview.set() 不触发 command 回调——代码内切换（校验失败跳转 /
-        更新跳转）与首次显示也需主动调用本方法。
-        """
-        try:
-            page = self._tab_view.get()
-            h = self._tab_view.tab(page).winfo_reqheight()
-            if h <= 200:
-                return
-            cur = self._tab_view.winfo_height()
-            if abs(cur - (h + 50)) > 5 and _depth < 5:
-                self._tab_view.configure(height=h)
-                self.after(40, lambda: self._fit_tab_height(_depth + 1))
-        except Exception:
-            pass
+        """tab 切换（保留：页面内部滚动结构无需额外处理）。"""
+        return
 
     # ------------------------------------------------------------------
     # directory selection
@@ -529,7 +496,6 @@ class App(ctk.CTk):
         dist_ok = self._validate_dist_tab()
         if not (info_ok and dist_ok):
             self._tab_view.set("信息" if not info_ok else "构建")
-            self._fit_tab_height()
             ui_dispatch.ui(self._finish_build_ui)
             return
         self._logger.info("校验通过")
@@ -604,7 +570,6 @@ class App(ctk.CTk):
         """
         if self._ask_new_version(latest, url, size):
             self._tab_view.set("设置")
-            self._fit_tab_height()
             self._settings_view.show_update(latest, url, size)
             # 未下载过 → 弹窗点「下载」后自动开始下载
             from backend.updater import update_dest

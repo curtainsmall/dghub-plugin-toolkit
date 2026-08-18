@@ -26,6 +26,7 @@ from backend.logbus import Logger
 from backend.pipeline import BuildContext
 from backend.project_manager import ProjectManager
 from gui.ui_dispatch import ui
+from gui.widgets import FillScrollable
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -69,10 +70,16 @@ class DebugTab(ctk.CTkFrame):
         self._update_hint()
 
     def _build_ui(self) -> None:
-        self.grid_columnconfigure(1, weight=1)
+        # 页面级滚动（内容填满视口，日志面板压缩视口时超高内容可滚动）
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        scroll = FillScrollable(self)
+        scroll.grid(row=0, column=0, sticky="nsew")
+        c = scroll.content
+        c.grid_columnconfigure(1, weight=1)
 
         # ---- row 0: 检测 DGHub ----
-        row = ctk.CTkFrame(self, fg_color="transparent")
+        row = ctk.CTkFrame(c, fg_color="transparent")
         row.grid(row=0, column=0, columnspan=2, sticky="ew",
                  padx=10, pady=(10, 0))
         row.grid_columnconfigure(1, weight=1)
@@ -92,7 +99,7 @@ class DebugTab(ctk.CTkFrame):
         self._detect_hint.pack(side="left", padx=(8, 0))
 
         # ---- row 1: 启动/停止 + 状态 ----
-        bottom = ctk.CTkFrame(self, fg_color="transparent")
+        bottom = ctk.CTkFrame(c, fg_color="transparent")
         bottom.grid(row=1, column=0, columnspan=2, sticky="ew",
                     padx=10, pady=(12, 0))
         bottom.grid_columnconfigure(1, weight=1)
@@ -118,7 +125,7 @@ class DebugTab(ctk.CTkFrame):
 
         # ---- row 2: 动态提示行（模式说明 / 校验结果） ----
         self._hint_lbl = ctk.CTkLabel(
-            self, text="", font=ctk.CTkFont(size=11),
+            c, text="", font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"), anchor="w",
             wraplength=640, justify="left")
         self._hint_lbl.grid(row=2, column=0, columnspan=2, sticky="ew",

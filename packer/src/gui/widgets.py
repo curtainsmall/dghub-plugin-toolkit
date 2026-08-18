@@ -58,6 +58,33 @@ def icon_font(size: int = 14) -> ctk.CTkFont:
     return ctk.CTkFont(size=size)
 
 
+class FillScrollable(ctk.CTkScrollableFrame):
+    """内容填满视口的滚动容器：内容 ≤ 视口时铺满，内容超高时滚动。
+
+    CTkScrollableFrame 的内容按自然尺寸（canvas 窗口 anchor=nw 不拉伸）
+    ——本类在 canvas <Configure> 时把内容框架最小尺寸同步为视口，
+    实现「fill + 可滚动」：页面内容始终占满可视区域，超高时出现滚动条。
+    用法：``fs = FillScrollable(parent); fs.pack(...)``，内容 grid/pack
+    到 ``fs.content``（不要直接挂到 fs 上）。
+    """
+
+    def __init__(self, master: Any, **kwargs: Any) -> None:
+        super().__init__(master, **kwargs)
+        self.content = ctk.CTkFrame(self, fg_color="transparent")
+        self.content.pack(fill="both", expand=True)
+        self._parent_canvas.bind("<Configure>", self._sync_fill, add="+")
+
+    def _sync_fill(self, _event: Any = None) -> None:
+        try:
+            vw = self._parent_canvas.winfo_width()
+            vh = self._parent_canvas.winfo_height()
+            self.content.configure(
+                width=max(self.content.winfo_reqwidth(), vw),
+                height=max(self.content.winfo_reqheight(), vh))
+        except Exception:
+            pass
+
+
 class ToolTip:
     """悬停提示：为控件绑定进入/离开事件，显示轻量气泡。"""
 

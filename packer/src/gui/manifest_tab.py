@@ -9,7 +9,7 @@ import customtkinter as ctk
 
 from backend.manifest_validator import VALID_FIELD_TYPES, validate_manifest
 from backend.project_manager import ProjectManager
-from gui.widgets import center_dialog, reset_entry_border
+from gui.widgets import FillScrollable, center_dialog, reset_entry_border
 
 FIELD_TYPE_LABELS: dict[str, str] = {
     "bool": "开关 (bool)",
@@ -105,11 +105,13 @@ class ManifestTab(ctk.CTkFrame):
 
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)  # main content
+        self.grid_rowconfigure(0, weight=1)  # main content（页面级滚动）
 
-        # -- main area: left (form) + right (preview) --
-        main = ctk.CTkFrame(self, fg_color="transparent")
-        main.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        # -- main area: left (form) + right (preview)——
+        #    内容填满视口，日志面板压缩视口时超高内容可滚动 --
+        scroll = FillScrollable(self)
+        scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        main = scroll.content
         main.grid_columnconfigure(0, weight=1)              # left 弹性
         main.grid_columnconfigure(1, weight=0, minsize=360)  # right 固定宽
         main.grid_rowconfigure(0, weight=1)
