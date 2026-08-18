@@ -22,6 +22,7 @@
 - **Packer**：fill_builder / sync_derived 的 deduce 合并去重并接管
   入口语义——编译系统自持入口（exe / 启动器 / 源码），与 deduced
   同名的手动 entry 尊重保留，异名降级为普通内容
+- **Packer**：GUI 术语中文化（复选框、占位符等 UI 文案统一为中文）
 
 ### 新增
 

@@ -207,7 +207,7 @@ entry = "src/main.py"
 
 ### 构建流程（Packer 自动执行）
 
-**自包含（编译页「自包含」checkbox 勾选，默认）**：
+**自包含（编译页「自包含」复选框勾选，默认）**：
 
 1. **安装依赖**：`uv pip install --target .deps/ -r pyproject.toml`
    （装到输出目录的 `.deps/`，构建后清理；设置页 PyPI 镜像源经
@@ -250,7 +250,7 @@ entry = "src/main.py"
 ```
 
 `manifest.entry` 相应为 `<插件名>.exe`（自包含）或 `[tool.dghub].entry`
-源码（依赖版）。构建页「按产物模式加后缀」checkbox 开启时，包名自动
+源码（依赖版）。构建页「按产物模式加后缀」复选框开启时，包名自动
 追加 `-self_contained` 或 `-dependent` 后缀（可在设置页自定义）。
 
 ### 插件作者须知

@@ -36,13 +36,15 @@ dgpacker-cli --version
     "compile_system": "python",
     "compile": "",
     "compile_dir": "",
-    "manifest": "pyproject.toml"
+    "manifest": "pyproject.toml",
+    "self_contained": true,
+    "auto_suffix": false
   },
   "builder": {
     "files": [
-      { "path": "my-plugin.exe", "tags": ["entry"] },
-      { "dir": "assets" },
-      { "pattern": "dist/**" }
+      { "path": "my-plugin.exe", "tags": ["entry"], "derived": true },
+      { "dir": "_internal", "derived": true },
+      { "dir": "assets" }
     ],
     "output_dir": "",
     "packer_name": ""
@@ -58,6 +60,8 @@ dgpacker-cli --version
 | `compile` | string | CommandCompiler 命令（`"command"` 时必填） |
 | `compile_dir` | string | CommandCompiler 执行目录（空 = 项目根） |
 | `manifest` | string | Python/Node.js 编译的依赖清单（`"python"`/`"node"` 时必填） |
+| `self_contained` | bool | 产物模式：`true` 自包含（默认，运行时打进 exe）/ `false` 依赖版（`vendor/` 分发，目标机需 Python/Node 运行时） |
+| `auto_suffix` | bool | 构建页「按产物模式加后缀」：开启时包名自动追加 `-self_contained` / `-dependent`（后缀文本可在设置页自定义，存于 `~/.dghub-sdk-packer`） |
 
 **builder 节**（打包配置）：
 
@@ -69,7 +73,8 @@ dgpacker-cli --version
 
 **files 条目**：`path` / `dir` / `pattern` 三选一；`tags` 可含 `"entry"`
 （入口标记，恰好一个，缺失/重复校验报错）；编译产物条目带 `derived: true`
-（自动声明，勿手工维护）。
+（自动声明，勿手工维护——构建前按 deduce 重建，旧版 `auto` 标签条目一并
+清理）。
 
 编译入口不在 project.json：Python 由 `pyproject.toml` 的 `[tool.dghub].entry`
 声明，Node.js 由 `package.json` 的 `main` 字段声明，CLI 构建时直接读取。
