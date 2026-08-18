@@ -60,19 +60,28 @@ class App(ctk.CTk):
         # 错误高亮登记表：tab 名 → 当前高亮的控件集合（用于级联清除）
         self._error_fields: dict[str, set] = {"信息": set(), "构建": set()}
 
+        # -- 线程安全 UI 调度（后台线程更新 UI 必须经此）--
+        import gui.ui_dispatch as ui_dispatch
+        ui_dispatch.init(self)
+
         # -- top bar (cross-tab) --
         self._build_top_bar()
 
-        # -- tab view --
-        self._tab_view = ctk.CTkTabview(self, anchor="nw")
-        self._tab_view.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+        # -- tab view（置于可滚动容器：日志面板展开压缩视口时，
+        #    编辑内容按自然高度滚动访问，不被挤压）--
+        self._tab_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._tab_scroll.grid(row=2, column=0, sticky="nsew",
+                              padx=10, pady=5)
+        self._tab_view = ctk.CTkTabview(self._tab_scroll, anchor="nw",
+                                        height=850,
+                                        command=self._on_tab_changed)
+        self._tab_view.pack(fill="both", expand=True)
 
         # -- tabs --
         self._info_tab = self._tab_view.add("信息")
         self._dist_tab = self._tab_view.add("构建")
         self._debug_tab = self._tab_view.add("调试")
         self._settings_tab = self._tab_view.add("设置")
-        self._log_tab = self._tab_view.add("日志")
 
         # -- populate tabs --
         self._info_view = ManifestTab(
@@ -82,15 +91,18 @@ class App(ctk.CTk):
         self._dist_view = BuildTab(
             self._dist_tab,
             on_compile_changed=self._on_compile_changed,
-            on_error_cleared=self._on_dist_errors_cleared)
+            on_error_cleared=self._on_dist_errors_cleared,
+            on_build_clicked=self._start_build)
         self._dist_view.pack(fill="both", expand=True)
 
-        self._log_view = LogTab(self._log_tab)
-        self._log_view.pack(fill="both", expand=True)
-        self._logger = Logger(self._log_view.emit)
+        # -- bottom: 全局日志面板（构建/调试双输出，可折叠）--
+        self._log_view = LogTab(self)
+        self._log_view.grid(row=3, column=0, sticky="sew", padx=10, pady=(0, 4))
+        self._logger = Logger(self._log_view.emit_build)
+        self._debug_logger = Logger(self._log_view.emit_debug)
 
         self._debug_view = DebugTab(
-            self._debug_tab, logger=self._logger,
+            self._debug_tab, logger=self._debug_logger,
             on_state_change=self._on_debug_state_changed)
         self._debug_view.pack(fill="both", expand=True)
 
@@ -101,8 +113,9 @@ class App(ctk.CTk):
             on_suffix_changed=lambda: self._dist_view.refresh_preview())
         self._settings_view.pack(fill="both", expand=True)
 
-        # -- bottom bar (cross-tab) --
-        self._build_bottom_bar()
+        # -- 构建按钮移入构建页（右栏底部）——app 侧只持有引用管理状态 --
+        self._build_btn = self._dist_view.get_build_button()
+        self._build_status = self._dist_view.get_build_status()
 
         # -- restore global settings --
         self._settings_view.set_pypi_index(
@@ -110,6 +123,9 @@ class App(ctk.CTk):
 
         # -- auto-load last plugin dir --
         self._auto_open_last_plugin_dir()
+
+        # 首次显示即按当前 tab 内容收紧高度（避免信息页被默认高度拉高）
+        self._fit_tab_height()
 
         # 启动即检查更新（后台线程，不阻塞 UI）
         self._auto_check_update()
@@ -222,24 +238,34 @@ class App(ctk.CTk):
         except Exception as exc:  # 填充失败不阻断编辑（构建时再报）
             self._logger.error(f"自动填充失败: {exc}")
 
-    # ------------------------------------------------------------------
-    # bottom bar
-    # ------------------------------------------------------------------
+    def _on_tab_changed(self, _tab: str = "") -> None:
+        """tab 高度自适应：按当前页面内容自然高度收紧 tabview 高度。
 
-    def _build_bottom_bar(self) -> None:
-        bar = ctk.CTkFrame(self, fg_color="transparent")
-        bar.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 10))
-        bar.grid_columnconfigure(0, weight=1)
+        固定高度会让内容少的页面（信息/设置）内部被拉高、底部留白；
+        延迟一拍等新页面布局完成后再读取请求高度。
+        """
+        try:
+            self.after(30, self._fit_tab_height)
+        except Exception:
+            pass
 
-        self._build_btn = ctk.CTkButton(
-            bar, text="开始构建", command=self._start_build,
-            width=120, height=36, font=ctk.CTkFont(size=14, weight="bold"))
-        self._build_btn.pack(side="right", padx=5)
+    def _fit_tab_height(self, _depth: int = 0) -> None:
+        """按当前页面内容自然高度收紧 tabview 高度（布局收敛，最多 5 拍）。
 
-        self._build_status = ctk.CTkLabel(bar, text="",
-                                          font=ctk.CTkFont(size=12),
-                                          anchor="e")
-        self._build_status.pack(side="right", padx=(5, 10))
+        CTkTabview.set() 不触发 command 回调——代码内切换（校验失败跳转 /
+        更新跳转）与首次显示也需主动调用本方法。
+        """
+        try:
+            page = self._tab_view.get()
+            h = self._tab_view.tab(page).winfo_reqheight()
+            if h <= 200:
+                return
+            cur = self._tab_view.winfo_height()
+            if abs(cur - (h + 50)) > 5 and _depth < 5:
+                self._tab_view.configure(height=h)
+                self.after(40, lambda: self._fit_tab_height(_depth + 1))
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # directory selection
@@ -456,6 +482,11 @@ class App(ctk.CTk):
                 pass
         self._info_view._set_enabled(not locked)
         self._dist_view._set_enabled(not locked)  # 含内嵌编译设置
+        # 构建按钮独立于控件锁：构建中保持可点（取消构建）
+        try:
+            self._build_btn.configure(state="normal")
+        except Exception:
+            pass
         # 调试运行期间构建按钮同样禁用（互斥），见 _on_debug_state_changed
         self._debug_view._set_enabled(not locked)
 
@@ -486,8 +517,30 @@ class App(ctk.CTk):
         # 锁定构建系统选择与所有编辑控件，避免构建期间状态被改动
         self._lock_controls(True)
 
-        # Run build in background
-        threading.Thread(target=self._run_build, daemon=True).start()
+        # 校验 + 配置收集在主线程执行（Tcl 变量只能主线程读写）；
+        # 通过后开后台线程跑构建管线
+        self.after(10, self._begin_build)
+
+    def _begin_build(self) -> None:
+        """主线程：校验 → 收集配置 → 启动构建线程。"""
+        import gui.ui_dispatch as ui_dispatch
+        self._logger.info("开始校验")
+        info_ok = self._validate_info_tab()
+        dist_ok = self._validate_dist_tab()
+        if not (info_ok and dist_ok):
+            self._tab_view.set("信息" if not info_ok else "构建")
+            self._fit_tab_height()
+            ui_dispatch.ui(self._finish_build_ui)
+            return
+        self._logger.info("校验通过")
+        # 主线程收集配置（StringVar / OptionMenu 等 Tcl 状态）
+        self._dist_view.get_compile_view().save_settings()
+        self._dist_view.save_settings()
+        self._logger.detail("配置已保存")
+        ctx = self._make_build_context()
+        manifest_data = self._info_view._build_manifest()
+        threading.Thread(target=self._run_build,
+                         args=(ctx, manifest_data), daemon=True).start()
 
     def _on_debug_state_changed(self) -> None:
         """调试运行状态变化：运行中禁用构建按钮（互斥，同一时间只跑一个子进程）。"""
@@ -535,9 +588,10 @@ class App(ctk.CTk):
             return
 
         def _check() -> None:
+            import gui.ui_dispatch as ui_dispatch
             latest, url, size = check_latest()
             if latest and url and should_notify(latest, version):
-                self.after(0, lambda: self._on_new_version_found(
+                ui_dispatch.ui(lambda: self._on_new_version_found(
                     latest, url, size))
 
         threading.Thread(target=_check, daemon=True).start()
@@ -550,6 +604,7 @@ class App(ctk.CTk):
         """
         if self._ask_new_version(latest, url, size):
             self._tab_view.set("设置")
+            self._fit_tab_height()
             self._settings_view.show_update(latest, url, size)
             # 未下载过 → 弹窗点「下载」后自动开始下载
             from backend.updater import update_dest
@@ -607,66 +662,55 @@ class App(ctk.CTk):
         dialog.wait_window()
         return result["ok"]
 
-    def _run_build(self) -> None:
-        """Validate and execute the build pipeline."""
-        ctx = None
+    def _run_build(self, ctx: BuildContext,
+                   manifest_data: dict[str, Any]) -> None:
+        """构建管线（后台线程；UI 更新经 ui_dispatch 回主线程）。
+
+        校验与配置收集已由主线程完成（_begin_build）——本线程只跑
+        后端 run_build（日志经线程安全 LogTab，UI 状态经调度）。
+        """
+        import gui.ui_dispatch as ui_dispatch
+        self._build_success = True
         try:
-            # Step 1: validate（一次性检测两个 tab 的所有字段）
-            self._logger.info("开始校验")
-            info_ok = self._validate_info_tab()
-            dist_ok = self._validate_dist_tab()
-            if not (info_ok and dist_ok):
-                self._tab_view.set("信息" if not info_ok else "构建")
-                return
-            self._logger.info("校验通过")
-            self._build_success = True
-
-            # Step 2: save settings
-            self._dist_view.get_compile_view().save_settings()
-            self._dist_view.save_settings()
-            self._logger.detail("配置已保存")
-
-            # Step 3: prepare context
-            ctx = self._make_build_context()
             ctx.output_dir.mkdir(parents=True, exist_ok=True)
-            manifest_data = self._info_view._build_manifest()
-
-            # Step 4: 构建 + 打包（backend 两阶段管线）
             try:
                 artifact = run_build(ctx, manifest_data)
             except BuildError as be:
                 for msg in be.errors:
                     self._logger.error(msg)
-                self._highlight_tab("构建")
+                ui_dispatch.ui(lambda: self._highlight_tab("构建"))
                 self._build_success = False
                 return
             if artifact is None:
                 self._build_success = False
                 return
-
         except Exception as exc:
             self._logger.error(f"构建失败: {exc}")
+            self._build_success = False
         finally:
-            self._running = False
-            # 按钮恢复为「开始构建」
-            self._build_btn.configure(text="开始构建", state="normal",
-                                      command=self._start_build)
-            # 解锁构建系统选择与编辑控件
-            self._lock_controls(False)
-            cancelled = (self._canceller is not None
-                         and self._canceller.cancelled)
-            if cancelled:
+            if (self._canceller is not None
+                    and self._canceller.cancelled):
                 # 取消后清理已产生的中间产物（仅 output_dir，不动用户源目录）
-                if ctx is not None:
-                    cleanup_intermediates(ctx.output_dir, ctx.plugin_name)
+                cleanup_intermediates(ctx.output_dir, ctx.plugin_name)
                 self._logger.warning("构建已取消")
-                self._build_status.configure(text="⏹ 已取消",
-                                             text_color=("gray50", "gray60"))
-            elif self._build_success:
-                self._build_status.configure(text="✅ 构建成功", text_color="green")
-            else:
-                self._build_status.configure(text="❌ 构建失败", text_color="red")
-            self._canceller = None
+            ui_dispatch.ui(self._finish_build_ui)
+
+    def _finish_build_ui(self) -> None:
+        """主线程：构建结束恢复按钮/状态/解锁（校验失败路径同样调用）。"""
+        self._running = False
+        self._build_btn.configure(text="开始构建", state="normal",
+                                  command=self._start_build)
+        self._lock_controls(False)
+        cancelled = (self._canceller is not None
+                     and self._canceller.cancelled)
+        if cancelled:
+            self._build_status.configure(text="⏹ 已取消",
+                                         text_color=("gray50", "gray60"))
+        elif self._build_success:
+            self._build_status.configure(text="✅ 构建成功", text_color="green")
+        else:
+            self._build_status.configure(text="❌ 构建失败", text_color="red")
+        self._canceller = None
 
     def _read_state(self) -> dict:
         """读取全局状态（委托 backend.settings_store）。"""

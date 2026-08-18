@@ -41,6 +41,7 @@ class BuildTab(ctk.CTkFrame):
     def __init__(self, master: Any,
                  on_compile_changed: Callable[[], None] | None = None,
                  on_error_cleared: Callable[[], None] | None = None,
+                 on_build_clicked: Callable[[], None] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
         self._pm: ProjectManager | None = None
@@ -49,6 +50,7 @@ class BuildTab(ctk.CTkFrame):
         self._enabled = False
         self._on_compile_changed = on_compile_changed
         self._on_error_cleared = on_error_cleared
+        self._on_build_clicked = on_build_clicked
         self._controls: list[ctk.CTkBaseClass] = []
         self._error_rels: set[str] = set()  # 校验失败的条目相对路径
         self._area_error: str = ""          # 区域级错误（如缺少入口）
@@ -175,6 +177,33 @@ class BuildTab(ctk.CTkFrame):
         self._preview.grid(row=3, column=0, sticky="nsew", padx=10,
                            pady=(0, 10))
         self._controls.append(self._preview)
+
+        # 构建按钮行（右栏底部）：开始构建 + 状态
+        build_row = ctk.CTkFrame(right, fg_color="transparent")
+        build_row.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 12))
+        build_row.grid_columnconfigure(0, weight=1)
+        self._build_status = ctk.CTkLabel(build_row, text="",
+                                          font=ctk.CTkFont(size=12),
+                                          anchor="e")
+        self._build_status.grid(row=0, column=0, sticky="e", padx=(0, 8))
+        self._build_btn = ctk.CTkButton(
+            build_row, text="开始构建", command=self._build_clicked,
+            width=120, height=36, font=ctk.CTkFont(size=14, weight="bold"))
+        self._build_btn.grid(row=0, column=1, sticky="e")
+        self._controls.append(self._build_btn)
+
+    def _build_clicked(self) -> None:
+        """「开始构建」→ 透传给 app（构建/取消切换由 app 管理）。"""
+        if self._on_build_clicked:
+            self._on_build_clicked()
+
+    def get_build_button(self) -> ctk.CTkButton:
+        """供 app 管理构建状态（文本切换 / 禁用）。"""
+        return self._build_btn
+
+    def get_build_status(self) -> ctk.CTkLabel:
+        """供 app 设置构建状态文本。"""
+        return self._build_status
 
     # ------------------------------------------------------------------
     # 打包内容（统一文件列表，标签标记入口）

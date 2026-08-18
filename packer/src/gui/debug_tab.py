@@ -4,7 +4,8 @@
   增量缓存：PyInstaller Analysis / tsc tsbuildinfo / npm lock），
   在产物文件夹内运行插件入口
 - 环境变量区：主机 / 端口 / 令牌，支持本机 DGHub 探测自动填充与手动填写
-- 插件 stdout/stderr 统一进日志 tab（logbus external）；本页仅状态行
+- 插件 stdout/stderr 统一进底部日志面板的「调试输出」子视图
+  （logbus external）；本页仅状态行
 """
 
 import os
@@ -24,6 +25,7 @@ from backend.builder import Builder
 from backend.logbus import Logger
 from backend.pipeline import BuildContext
 from backend.project_manager import ProjectManager
+from gui.ui_dispatch import ui
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -186,9 +188,9 @@ class DebugTab(ctk.CTkFrame):
         ok = detect_dghub(host, port)
         if ok:
             token = fetch_token(host, port)
-            self.after(0, self._on_detect_success, token)
+            ui(lambda: self._on_detect_success(token))
         else:
-            self.after(0, self._on_detect_fail)
+            ui(self._on_detect_fail)
 
     def _on_detect_success(self, token: str | None = None) -> None:
         settings_store.save_state_key("debug_env", {
@@ -220,7 +222,9 @@ class DebugTab(ctk.CTkFrame):
         self._start_btn.configure(state="disabled")
         self._stop_btn.configure(state="normal")
         self._notify_state()
-        threading.Thread(target=self._run, daemon=True).start()
+        # env 在主线程构造（StringVar 读取限主线程），随线程传入
+        env = self._build_env()
+        threading.Thread(target=self._run, args=(env,), daemon=True).start()
 
     def _stop_clicked(self) -> None:
         if self._canceller is not None:
@@ -267,18 +271,16 @@ class DebugTab(ctk.CTkFrame):
             keep_cache=True,  # 调试构建保留 .deps / cache（PyInstaller 增量）
         )
 
-    def _run(self) -> None:
+    def _run(self, env: dict) -> None:
         canceller = Canceller()
         self._canceller = canceller
-        env = self._build_env()
         rc = -1
         try:
             # 调试运行：先构建（增量缓存），再运行产物（构建过程与目标
             # 结构是调试对象本身——deps 模式同样需要 npm install + tsc）
             ctx = self._make_debug_ctx(canceller)
             self._logger.info("调试构建（文件夹输出到 插件目录/debug/）...")
-            self.after(0, lambda: self._set_status(
-                "构建中...", ("#B8860B", "#E6B84B")))
+            ui(lambda: self._set_status("构建中...", ("#B8860B", "#E6B84B")))
             artifact = build_for_debug(ctx, self._pm.read_manifest())
             if artifact is None:
                 return
@@ -300,15 +302,14 @@ class DebugTab(ctk.CTkFrame):
                 env["PYTHONPATH"] = (merged + os.pathsep + old
                                      if merged and old else merged or old)
             self._logger.info(f"运行产物: {entry}")
-            self.after(0, lambda: self._set_status(
-                "运行中", ("#2E7D32", "#4CAF50")))
+            ui(lambda: self._set_status("运行中", ("#2E7D32", "#4CAF50")))
             rc = run_process(resolve_run_command(entry), artifact,
                              env, self._logger, "调试运行", canceller)
             self._logger.info(f"调试进程退出码: {rc}")
         finally:
             self._canceller = None
             self._running = False
-            self.after(0, self._finish_run)
+            ui(self._finish_run)
 
     def _finish_run(self) -> None:
         self._set_status("已停止" if self._running is False else "空闲")

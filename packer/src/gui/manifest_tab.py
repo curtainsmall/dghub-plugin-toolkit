@@ -105,20 +105,11 @@ class ManifestTab(ctk.CTkFrame):
 
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=0)  # header
-        self.grid_rowconfigure(1, weight=1)  # main content
-
-        # -- header --
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
-        header.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(header, text="Manifest 编辑器",
-                     font=ctk.CTkFont(size=18, weight="bold")).pack(side="left")
+        self.grid_rowconfigure(0, weight=1)  # main content
 
         # -- main area: left (form) + right (preview) --
         main = ctk.CTkFrame(self, fg_color="transparent")
-        main.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        main.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         main.grid_columnconfigure(0, weight=1)              # left 弹性
         main.grid_columnconfigure(1, weight=0, minsize=360)  # right 固定宽
         main.grid_rowconfigure(0, weight=1)
@@ -141,7 +132,7 @@ class ManifestTab(ctk.CTkFrame):
 
         # -- bottom bar --
         bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 10))
+        bottom.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
         bottom.grid_columnconfigure(0, weight=1)
 
         self._error_label = ctk.CTkLabel(bottom, text="", text_color="red")
