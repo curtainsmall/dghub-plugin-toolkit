@@ -376,7 +376,7 @@ import(pathToFileURL(path.join(__dirname, "{entry}")).href)
 # postject 注入哨兵（官方固定值）
 _SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2"
 
-# 依赖版启动器（bundle=deps）：DGHub 以 .py 入口执行本脚本（宿主自带 Python
+# 依赖版启动器（self_contained=false）：DGHub 以 .py 入口执行本脚本（宿主自带 Python
 # 运行时），拉起系统 Node 运行插件入口。环境变量（DGHUB_TOKEN 等）由子进程继承。
 _NODE_LAUNCHER = '''\
 """Node 插件启动器（依赖版产物，由 Packer 生成）。
@@ -425,12 +425,8 @@ class NodeCompiler(Compiler):
     fields = {
         "manifest": {"label": "依赖清单", "type": "str",
                      "default": "", "required": True},
-        "bundle": {"label": "产物模式", "type": "str",
-                   "default": "exe", "required": False,
-                   "choices": [
-                       ("exe", "自包含（SEA exe，目标机无需 Node）"),
-                       ("deps", "依赖版（源码 + node_modules + 启动脚本，需系统 Node）"),
-                   ]},
+        "self_contained": {"label": "自包含模式", "type": "bool",
+                           "default": True},
     }
 
     def enabled(self, cfg: dict[str, Any]) -> bool:
@@ -459,9 +455,6 @@ class NodeCompiler(Compiler):
     def validate(self, cfg: dict[str, Any],
                  source_dir: Path) -> list[str]:
         errors = super().validate(cfg, source_dir)
-        bundle = cfg.get("bundle", "exe")
-        if bundle not in ("exe", "deps"):
-            errors.append(f"未知产物模式: {bundle}（exe / deps）")
         manifest = cfg.get("manifest", "")
         if manifest and not self.is_known_manifest(Path(manifest).name):
             errors.append(f"无法识别的依赖清单: {Path(manifest).name}"
@@ -482,13 +475,13 @@ class NodeCompiler(Compiler):
                 source_dir: Path | None = None) -> list[BuilderItem] | None:
         """manifest 已选 → 推导产物条目。
 
-        bundle=exe（默认）：SEA exe + node_modules + 入口目录；
-        bundle=deps：启动脚本 start_node.py（.py 入口）+ node_modules + 入口目录。
+        self_contained=true（默认）：SEA exe + node_modules + 入口目录；
+        self_contained=false：启动脚本 start_node.py（.py 入口）+ 入口目录。
         """
         if not cfg.get("manifest") or not plugin_name:
             return None
         items: list[BuilderItem] = []
-        if cfg.get("bundle") == "deps":
+        if not cfg.get("self_contained", True):
             items.append(BuilderItem(path="start_node.py", tags=["entry"],
                                      derived=True))
         else:
@@ -565,7 +558,7 @@ class NodeCompiler(Compiler):
         # 3) 产物模式：exe（SEA）或 deps（依赖版）
         prod_dir = ctx.output_dir / ".node" / ctx.plugin_name
         prod_dir.mkdir(parents=True, exist_ok=True)
-        if ctx.cfg.get("bundle") == "deps":
+        if not ctx.cfg.get("self_contained", True):
             # 依赖版：跳过 SEA，生成 .py 启动脚本作 entry（宿主以 .py 入口
             # 执行，用自带 Python 运行时拉起系统 Node）
             launcher = prod_dir / "start_node.py"
@@ -634,7 +627,7 @@ class NodeCompiler(Compiler):
         # 6) 清理：构建期间生成的 package-lock.json（若原本不存在）
         if not lock_existed:
             (ctx.source_dir / "package-lock.json").unlink(missing_ok=True)
-        ctx.log.info(f"构建完成（{'exe' if ctx.cfg.get('bundle') != 'deps' else 'deps'}）")
+        ctx.log.info(f"构建完成（{'exe' if ctx.cfg.get('self_contained', True) else 'deps'}）")
         return True
 
 

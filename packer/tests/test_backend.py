@@ -175,34 +175,31 @@ def test_compiler_registry():
 
 
 def test_node_compiler_bundle_deduce(make_project):
-    """Node 产物模式：exe（默认）vs deps 推导不同 entry 条目。"""
+    """Node 产物模式：self_contained=true（默认）vs false 推导不同 entry 条目。"""
     node = get_compiler("node")
     cfg = {"manifest": "package.json"}
-    # exe（默认）：SEA exe 作入口
+    # true（默认）：SEA exe 作入口
     assert [i.to_dict() for i in node.deduce(cfg, "my-plugin")] == [
         {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
         {"dir": "node_modules", "derived": True}]
-    # deps：start_node.py 作入口
+    # false：start_node.py 作入口
     assert [i.to_dict() for i in node.deduce(
-        {**cfg, "bundle": "deps"}, "my-plugin")] == [
+        {**cfg, "self_contained": False}, "my-plugin")] == [
         {"path": "start_node.py", "tags": ["entry"], "derived": True},
         {"dir": "node_modules", "derived": True}]
 
 
 def test_node_compiler_bundle_validate(make_project):
-    """bundle 值校验：exe/deps 合法，未知值报错。"""
+    """self_contained 字段接受 bool。"""
     pm, _, plugin_dir = make_project()
     (plugin_dir / "package.json").write_text(
         json.dumps({"main": "main.js"}))
     (plugin_dir / "main.js").write_text("x")
     node = get_compiler("node")
     assert node.validate({"manifest": "package.json",
-                          "bundle": "exe"}, plugin_dir) == []
+                          "self_contained": True}, plugin_dir) == []
     assert node.validate({"manifest": "package.json",
-                          "bundle": "deps"}, plugin_dir) == []
-    assert any("产物模式" in e
-               for e in node.validate({"manifest": "package.json",
-                                       "bundle": "fat"}, plugin_dir))
+                          "self_contained": False}, plugin_dir) == []
 
 
 def test_resolve_packer_name_suffix(make_project, make_ctx):
@@ -213,16 +210,16 @@ def test_resolve_packer_name_suffix(make_project, make_ctx):
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
                       compile_cfg={"manifest": "package.json"})
     assert resolve_packer_name(ctx, {}) == "my-pack"
-    # exe + auto_suffix → -self-contained
+    # self_contained=True + auto_suffix → -self-contained
     ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
                        compile_cfg={"manifest": "package.json",
-                                    "bundle": "exe",
+                                    "self_contained": True,
                                     "auto_suffix": True})
     assert resolve_packer_name(ctx2, {}) == "my-pack-self-contained"
-    # deps + auto_suffix → -dependent
+    # self_contained=False + auto_suffix → -dependent
     ctx3, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
                        compile_cfg={"manifest": "package.json",
-                                    "bundle": "deps",
+                                    "self_contained": False,
                                     "auto_suffix": True})
     assert resolve_packer_name(ctx3, {}) == "my-pack-dependent"
 

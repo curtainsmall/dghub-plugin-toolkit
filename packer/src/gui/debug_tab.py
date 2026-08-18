@@ -243,7 +243,7 @@ class DebugTab(ctk.CTkFrame):
             compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", "")}
         elif compile_system == "node":
             compile_cfg = {"manifest": project.get("compiler", {}).get("manifest", ""),
-                           "bundle": project.get("compiler", {}).get("bundle", "exe"),
+                           "self_contained": project.get("compiler", {}).get("self_contained", True),
                            "auto_suffix": project.get("compiler", {}).get("auto_suffix", False)}
         elif compile_system == "command":
             compile_cfg = {"command": project.get("compiler", {}).get("command", ""),

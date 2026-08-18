@@ -40,7 +40,7 @@ class CompileTab(ctk.CTkFrame):
         # 状态变量
         self._compile_system_var = ctk.StringVar(value="")
         self._manifest_var = ctk.StringVar(value="")
-        self._bundle_var = ctk.StringVar(value="exe")   # Node 产物模式
+        self._bundle_var = ctk.BooleanVar(value=True)  # True = 自包含（exe）
         self._compile_var = ctk.StringVar(value="")   # 编译命令字符串
         self._compile_dir = ""  # 执行目录（绝对路径；空 = 项目根）
 
@@ -115,7 +115,7 @@ class CompileTab(ctk.CTkFrame):
         self._manifest_btn.pack(side="left")
         self._controls.extend([self._manifest_label, self._manifest_btn])
 
-        # 产物模式（Node 专属：exe 自包含 / deps 依赖版）
+        # 自包含模式（Node 专属：勾选 = 打包运行时，不勾选 = 依赖系统 Node）
         self._bundle_frame = ctk.CTkFrame(self._py_frame, fg_color="transparent")
         self._bundle_frame.grid(row=1, column=0, columnspan=3, sticky="ew",
                                 padx=(0, 0), pady=(8, 0))
@@ -125,23 +125,20 @@ class CompileTab(ctk.CTkFrame):
             row=0, column=0, padx=(0, 5), sticky="w")
         bundle_row = ctk.CTkFrame(self._bundle_frame, fg_color="transparent")
         bundle_row.grid(row=0, column=1, sticky="w", padx=5)
-        self._bundle_menu = ctk.CTkOptionMenu(
-            bundle_row, width=220, values=[
-                "自包含",
-                "依赖版"],
-            command=self._on_bundle_changed)
-        self._bundle_menu.pack(side="left")
+        self._bundle_var = ctk.BooleanVar(value=True)
+        self._bundle_check = ctk.CTkCheckBox(
+            bundle_row, text="自包含", variable=self._bundle_var,
+            command=self._on_bundle_toggled)
+        self._bundle_check.pack(side="left")
         self._bundle_hint_icon = ctk.CTkLabel(
             bundle_row, text="\uf059", width=24,
             font=icon_font(), cursor="question_arrow")
         self._bundle_hint_icon.pack(side="left", padx=(6, 0))
-        self._controls.append(self._bundle_menu)
+        self._controls.append(self._bundle_check)
         self._bundle_hint_tip = ToolTip(
             self._bundle_hint_icon,
-            "自包含：打包 Node.js 运行时（SEA 注入），目标机无需安装 Node\n"
-            "依赖版：不打包运行时，目标机需安装 Node.js；"
-            "跳过 SEA 打包，无需 postject 等工具链")
-        self._controls.append(self._bundle_menu)
+            "开启：打包 Node.js 运行时（SEA 注入），目标机无需安装 Node\n"
+            "关闭：不打包运行时，使用系统 Node.js；跳过 SEA 打包")
         self._bundle_frame.grid_remove()
 
 
@@ -304,9 +301,8 @@ class CompileTab(ctk.CTkFrame):
         self._on_setting_changed()
         self._check_pyinstaller_bg()
 
-    def _on_bundle_changed(self, label: str) -> None:
-        """产物模式下拉变化 → 同步变量并保存。"""
-        self._bundle_var.set("deps" if "依赖版" in label else "exe")
+    def _on_bundle_toggled(self) -> None:
+        """自包含 checkbox 变化 → 保存。"""
         self._on_setting_changed()
 
     def _pick_compile_dir(self) -> None:
@@ -386,11 +382,7 @@ class CompileTab(ctk.CTkFrame):
                              COMPILER_CHOICES[0][1])
                 self._proc_menu.set(label)
                 self._manifest_var.set(project.get("compiler", {}).get("manifest", ""))
-                bundle = project.get("compiler", {}).get("bundle", "exe")
-                self._bundle_var.set(bundle if bundle in ("exe", "deps") else "exe")
-                self._bundle_menu.set(
-                    "依赖版" if bundle == "deps"
-                    else "自包含")
+                self._bundle_var.set(project.get("compiler", {}).get("self_contained", True))
                 self._compile_var.set(project.get("compiler", {}).get("command", ""))
                 rel_exec = project.get("compiler", {}).get("compile_dir", "")
                 self._compile_dir = (self._pm.to_absolute(rel_exec)
@@ -413,7 +405,7 @@ class CompileTab(ctk.CTkFrame):
         compiler = project["compiler"]
         compiler["compile_system"] = self._compile_id()
         compiler["manifest"] = self._manifest_var.get()
-        compiler["bundle"] = self._bundle_var.get()
+        compiler["self_contained"] = self._bundle_var.get()
         compiler["command"] = self._compile_var.get()
         compiler["compile_dir"] = (self._pm.to_relative(self._compile_dir)
                                  if self._compile_dir else "")
@@ -429,7 +421,7 @@ class CompileTab(ctk.CTkFrame):
             return {"manifest": self._manifest_var.get()}
         if cid == "node":
             return {"manifest": self._manifest_var.get(),
-                    "bundle": self._bundle_var.get()}
+                    "self_contained": self._bundle_var.get()}
         if cid == "command":
             return {"command": self._compile_var.get(),
                     "compile_dir": self._compile_dir}
