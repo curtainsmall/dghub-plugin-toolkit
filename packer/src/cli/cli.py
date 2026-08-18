@@ -22,7 +22,7 @@ from backend.project_manager import (
 )
 
 try:
-    from backend._version import __version__
+    from backend._version import __version__  # type: ignore[reportMissingImports]
 except ImportError:  # 源码运行（_version.py 仅构建期生成）
     __version__ = "dev"
 

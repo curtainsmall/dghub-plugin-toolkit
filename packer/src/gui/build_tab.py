@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 import customtkinter as ctk
 
-from backend.builder import Builder, evaluate_pattern
+from backend.builder import Builder, BuilderItem, evaluate_pattern
 from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
 from gui.compile_tab import CompileTab
@@ -51,7 +51,7 @@ class BuildTab(ctk.CTkFrame):
         self._on_compile_changed = on_compile_changed
         self._on_error_cleared = on_error_cleared
         self._on_build_clicked = on_build_clicked
-        self._controls: list[ctk.CTkBaseClass] = []
+        self._controls: list[Any] = []
         self._error_rels: set[str] = set()  # 校验失败的条目相对路径
         self._area_error: str = ""          # 区域级错误（如缺少入口）
         self._builder_obj: Builder | None = None  # 持久的 Builder 实例（含 deduced 视图）
@@ -394,7 +394,8 @@ class BuildTab(ctk.CTkFrame):
             if is_derived:
                 # 编译产物：显示相对插件目录的路径（输出目录/.pyi/<插件名>/...）
                 out_rel = (b.get_output_dir() or "output").rstrip("/\\")
-                display = f"{out_rel}/.pyi/{Path(self._plugin_dir).name}/{rel}"
+                plugin_name = Path(self._plugin_dir or ".").name
+                display = f"{out_rel}/.pyi/{plugin_name}/{rel}"
                 if kind == "dir":
                     display += "/"
             else:
@@ -434,7 +435,7 @@ class BuildTab(ctk.CTkFrame):
 
             # 整行可双击（derived 只读不绑定；✕ 保留自身 command）
             if not is_derived:
-                def _bind_row_click(w: ctk.CTkBaseClass, idx: int) -> None:
+                def _bind_row_click(w: Any, idx: int) -> None:
                     for child in w.winfo_children():
                         if isinstance(child, ctk.CTkButton):
                             continue
@@ -507,8 +508,8 @@ class BuildTab(ctk.CTkFrame):
         self._refresh_item_list()
         self._refresh_preview()
 
-    def _ask_item_detail(self, item: dict) -> tuple[str | None,
-                                                             list[str]] | None:
+    def _ask_item_detail(self, item: BuilderItem) -> tuple[str | None,
+                                                           list[str]] | None:
         """条目详情对话框：完整路径 + 重选按钮 + 标签下拉。
 
         返回 (重选后的相对路径或 None, 新标签)；取消返回 None。
@@ -589,6 +590,7 @@ class BuildTab(ctk.CTkFrame):
                                                        padx=(6, 0))
 
         # ---- 标签（仅文件可标入口；目录/规则无标签）----
+        tag_menu: ctk.CTkOptionMenu | None = None
         if is_file:
             tag_row = ctk.CTkFrame(win, fg_color="transparent")
             tag_row.pack(fill="x", padx=16, pady=(14, 0))
@@ -602,11 +604,10 @@ class BuildTab(ctk.CTkFrame):
 
         def _ok() -> None:
             new_tags: list[str] = []
-            if is_file and tag_menu.get() == "入口":
+            if is_file and tag_menu is not None and tag_menu.get() == "入口":
                 new_tags = ["entry"]
             result[:] = [pending[0], new_tags]
             win.destroy()
-
         btns = ctk.CTkFrame(win, fg_color="transparent")
         btns.pack(fill="x")
         ctk.CTkButton(btns, text="取消", width=70,
@@ -626,9 +627,6 @@ class BuildTab(ctk.CTkFrame):
             self.clear_errors()  # 内容已变，清除旧错误高亮
             self._refresh_item_list()
             self._refresh_preview()
-
-    def get_builder(self) -> Builder | None:
-        return self._builder()
 
     # ------------------------------------------------------------------
     # 持久化

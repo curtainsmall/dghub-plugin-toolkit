@@ -45,7 +45,7 @@ def pack_suffix(compile_cfg: dict[str, Any] | None) -> str:
     """
     if not (compile_cfg or {}).get("auto_suffix"):
         return ""
-    sc = compile_cfg.get("self_contained", True)
+    sc = (compile_cfg or {}).get("self_contained", True)
     suffix_key = "exe" if sc else "deps"
     default = _DEFAULT_SUFFIXES.get(suffix_key, "")
     from backend import settings_store

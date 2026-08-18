@@ -160,8 +160,8 @@ def test_python_compiler_probe(tmp_path):
 
 def test_python_compiler_deduce(make_project):
     py = get_compiler("python")
-    assert [i.to_dict() for i in py.deduce(
-        {"manifest": "pyproject.toml"}, "my-plugin")] == [
+    assert [i.to_dict() for i in (py.deduce(
+        {"manifest": "pyproject.toml"}, "my-plugin") or [])] == [
         {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
         {"dir": "_internal", "derived": True}]
     assert py.deduce({"manifest": ""}, "my-plugin") is None
@@ -176,7 +176,7 @@ def test_python_compiler_deduce_dependent(make_project):
     (plugin_dir / "pyproject.toml").write_text(
         '[tool.dghub]\nentry="src/main.py"\n')
     items = py.deduce({"manifest": "pyproject.toml",
-                       "self_contained": False}, "my-plugin", plugin_dir)
+                       "self_contained": False}, "my-plugin", plugin_dir) or []
     assert [i.to_dict() for i in items] == [
         {"path": "src/main.py", "tags": ["entry"], "derived": True},
         {"dir": "vendor", "derived": True},
@@ -185,7 +185,7 @@ def test_python_compiler_deduce_dependent(make_project):
     (plugin_dir / "pyproject.toml").write_text(
         '[tool.dghub]\nentry="main.py"\n')
     items = py.deduce({"manifest": "pyproject.toml",
-                       "self_contained": False}, "my-plugin", plugin_dir)
+                       "self_contained": False}, "my-plugin", plugin_dir) or []
     assert [i.to_dict() for i in items] == [
         {"path": "main.py", "tags": ["entry"], "derived": True},
         {"dir": "vendor", "derived": True}]
@@ -228,7 +228,8 @@ def test_compiler_registry():
     none_comp = get_compiler("")
     assert none_comp.id == "" and none_comp.label == "无"
     assert get_compiler("unknown") is none_comp
-    assert none_comp.run(object()) is True  # 阶段 1 空操作
+    # 阶段 1 空操作（run 不读取 ctx 内容）
+    assert none_comp.run(object()) is True  # type: ignore[reportArgumentType]
 
 
 def test_node_compiler_bundle_deduce(make_project):
@@ -236,12 +237,12 @@ def test_node_compiler_bundle_deduce(make_project):
     node = get_compiler("node")
     cfg = {"manifest": "package.json"}
     # true（默认）：SEA exe 作入口
-    assert [i.to_dict() for i in node.deduce(cfg, "my-plugin")] == [
+    assert [i.to_dict() for i in (node.deduce(cfg, "my-plugin") or [])] == [
         {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
         {"dir": "node_modules", "derived": True}]
     # false：start_node.py 作入口
-    assert [i.to_dict() for i in node.deduce(
-        {**cfg, "self_contained": False}, "my-plugin")] == [
+    assert [i.to_dict() for i in (node.deduce(
+        {**cfg, "self_contained": False}, "my-plugin") or [])] == [
         {"path": "start_node.py", "tags": ["entry"], "derived": True},
         {"dir": "node_modules", "derived": True}]
 

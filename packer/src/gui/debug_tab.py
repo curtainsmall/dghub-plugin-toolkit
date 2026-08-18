@@ -269,7 +269,8 @@ class DebugTab(ctk.CTkFrame):
             output_dir=plugin_dir / "debug",
             plugin_name=plugin_dir.name,
             compile_system=compile_system,
-            builder=Builder(self._pm),
+            builder=Builder(self._pm) if self._pm else Builder(
+                ProjectManager(str(plugin_dir))),
             log=self._logger,
             pm=self._pm,
             pypi_index=settings_store.get_state("pypi_index", ""),
@@ -288,6 +289,8 @@ class DebugTab(ctk.CTkFrame):
             ctx = self._make_debug_ctx(canceller)
             self._logger.info("调试构建（文件夹输出到 插件目录/debug/）...")
             ui(lambda: self._set_status("构建中...", ("#B8860B", "#E6B84B")))
+            if self._pm is None:
+                return
             artifact = build_for_debug(ctx, self._pm.read_manifest())
             if artifact is None:
                 return

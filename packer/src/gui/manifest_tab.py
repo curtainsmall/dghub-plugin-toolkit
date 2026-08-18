@@ -66,9 +66,9 @@ class ManifestTab(ctk.CTkFrame):
         super().__init__(master, **kwargs)
         # internal data
         self._sections: list[dict[str, Any]] = []
-        self._section_buttons: list[ctk.CTkButton] = []
+        self._section_buttons: list[ctk.CTkFrame] = []
         self._selected_section: int = 0
-        self._field_buttons: list[ctk.CTkButton] = []
+        self._field_buttons: list[ctk.CTkFrame] = []
         self._selected_field: int = 0  # 默认选中第一个字段
         self._plugin_dir: str | None = None
         self._controls: list[ctk.CTkBaseClass] = []

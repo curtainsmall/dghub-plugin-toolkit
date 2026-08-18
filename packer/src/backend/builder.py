@@ -318,7 +318,7 @@ class Builder:
                     if f.is_file():
                         _append(f, f"{rel}/{f.relative_to(base).as_posix()}")
             else:  # pattern
-                rel = item.pattern
+                rel = item.pattern or ""
                 for matched in evaluate_pattern(source_dir, rel):
                     src = source_dir / matched
                     if src.is_file():

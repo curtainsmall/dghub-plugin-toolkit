@@ -12,9 +12,9 @@ def _norm(p: str) -> str:
     return Path(p).as_posix()
 
 
-def _norm_dir(p: str) -> str:
+def _norm_dir(p: str | Path) -> str:
     """显示用目录路径：正斜杠 + 尾部 "/"。"""
-    return _norm(p).rstrip("/") + "/"
+    return _norm(str(p)).rstrip("/") + "/"
 
 import customtkinter as ctk
 
@@ -137,7 +137,7 @@ class App(ctk.CTk):
         BTN_W = 100
         
         # Store buttons for state management
-        self._out_btns: list[ctk.CTkBaseClass] = []
+        self._out_btns: list[ctk.CTkButton] = []
         
         def _make_dir_row(bar, row, label, text, select_cmd, reset_cmd=None):
             """Helper to build a uniform directory selector row.
@@ -186,12 +186,6 @@ class App(ctk.CTk):
             reset_cmd=self._reset_output_dir)
         self._out_reset_btn = self._out_btns[1]
         
-        # Row 1: 输出目录（初始禁用）
-        self._out_path_frame, self._out_label, self._out_btns = _make_dir_row(
-            bar, 1, "输出目录:", "", self._select_output_dir,
-            reset_cmd=self._reset_output_dir)
-        self._out_reset_btn = self._out_btns[1]
-        
         # Initially disable output row
         for b in self._out_btns:
             b.configure(state="disabled")
@@ -220,7 +214,7 @@ class App(ctk.CTk):
             return
         try:
             ctx = self._make_build_context()
-            applied = fill_builder(ctx)
+            applied = fill_builder(ctx) or []
             for line in applied:
                 self._logger.info(f"已应用: {line}")
             if applied:
@@ -299,7 +293,7 @@ class App(ctk.CTk):
         # 清空错误登记表
         self._error_fields = {"信息": set(), "构建": set()}
 
-    def _tab_color(self, name: str, color: str) -> None:
+    def _tab_color(self, name: str, color: str | tuple[str, str]) -> None:
         """Set a tab's title color."""
         try:
             btn = self._tab_view._segmented_button._buttons_dict.get(name)

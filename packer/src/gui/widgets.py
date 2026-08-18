@@ -15,8 +15,9 @@ _ICON_FAMILY: str | None | bool = False   # False = 尚未探测
 
 
 def _fa_path() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys._MEIPASS) / "fontawesome" / _FA_FILENAME
+    meipass = getattr(sys, "_MEIPASS", None)
+    if getattr(sys, "frozen", False) and meipass:
+        return Path(meipass) / "fontawesome" / _FA_FILENAME
     return (Path(__file__).resolve().parent
             / "assets" / "fontawesome" / _FA_FILENAME)
 
@@ -29,7 +30,7 @@ def load_icon_font() -> str | None:
     """
     global _ICON_FAMILY
     if _ICON_FAMILY is not False:
-        return _ICON_FAMILY
+        return _ICON_FAMILY if isinstance(_ICON_FAMILY, str) else None
     # 系统已装 Font Awesome（Linux/macOS 常见）→ 直接用
     for family in tkfont.families():
         if "Font Awesome" in family:

@@ -14,7 +14,7 @@ from backend.updater import (DownloadCancelled, check_latest,
                              get_current_version, is_newer, update_dest)
 
 try:
-    from backend._version import __version__ as APP_VERSION
+    from backend._version import __version__ as APP_VERSION  # type: ignore[reportMissingImports]
 except ImportError:
     # 开发模式：backend/_version.py 仅在构建期生成
     APP_VERSION = "dev"
