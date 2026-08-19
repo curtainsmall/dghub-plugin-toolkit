@@ -124,7 +124,7 @@ class ManifestTab(ctk.CTkFrame):
         left.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
 
         right = ctk.CTkFrame(main_card, fg_color="transparent")
-        right.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
+        right.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
         right.grid_rowconfigure(0, weight=1)
         right.grid_columnconfigure(0, weight=1)
 
@@ -259,7 +259,7 @@ class ManifestTab(ctk.CTkFrame):
         sec_right.grid_columnconfigure(0, weight=1)
         sec_right.grid_rowconfigure(1, weight=1)
 
-        ctk.CTkLabel(sec_right, text="字段列表 (Fields)",
+        ctk.CTkLabel(sec_right, text="字段列表",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
         self._field_container = ctk.CTkScrollableFrame(
             sec_right, fg_color="transparent")
