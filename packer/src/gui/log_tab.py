@@ -13,6 +13,7 @@ import customtkinter as ctk
 
 from backend import settings_store
 from gui.ui_dispatch import ui
+from gui.widgets import BG1, BG2
 
 # 仅这三种级别着色；颜色取在浅色/深色文本框背景下均可读的中间色调
 # （tkinter tag 只接受单色，无法用 CTk 的 (light, dark) 二元组）。
@@ -29,11 +30,12 @@ class _LogPane(ctk.CTkFrame):
     """单个日志子视图：只读文本 + 级别着色。"""
 
     def __init__(self, master: Any, **kwargs: Any) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color=BG2, corner_radius=6, **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self._text = ctk.CTkTextbox(
-            self, wrap="word", font=("Consolas", 11), state="disabled")
+            self, wrap="word", font=("Consolas", 11), state="disabled",
+            fg_color=BG2)
         self._text.grid(row=0, column=0, sticky="nsew")
         for level, color in _LEVEL_COLORS.items():
             self._text.tag_config(level, foreground=color)
@@ -68,7 +70,8 @@ class LogTab(ctk.CTkFrame):
     """底部全局日志面板：构建输出 / 调试输出两个子视图，可折叠。"""
 
     def __init__(self, master: Any, **kwargs: Any) -> None:
-        super().__init__(master, **kwargs)
+        # 整体为第一层浮动卡片（BG1），浮在全局背景（BG0）上
+        super().__init__(master, fg_color=BG1, corner_radius=8, **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 

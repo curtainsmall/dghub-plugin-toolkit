@@ -17,7 +17,8 @@ from backend.builder import Builder, BuilderItem, evaluate_pattern
 from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
 from gui.compile_tab import CompileTab
-from gui.widgets import FillScrollable, center_dialog, reset_entry_border
+from gui.widgets import (BG1, BG2, STRIP_A, STRIP_B, FillScrollable,
+                         center_dialog, reset_entry_border)
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -80,12 +81,16 @@ class BuildTab(ctk.CTkFrame):
         scroll = FillScrollable(self)
         scroll.grid(row=0, column=0, sticky="nsew")
         c = scroll.content
-        c.grid_columnconfigure(0, weight=3)
-        c.grid_columnconfigure(1, weight=2)
-        c.grid_rowconfigure(0, weight=1)
+        # 第一层浮动卡片（BG1）：tab 全部内容包在一个 frame 中，
+        # 浮在全局背景（BG0）上；内部双栏透明（同 BG1，无间隙）
+        main_card = ctk.CTkFrame(c, fg_color=BG1, corner_radius=8)
+        main_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        main_card.grid_columnconfigure(0, weight=3)
+        main_card.grid_columnconfigure(1, weight=2)
+        main_card.grid_rowconfigure(0, weight=1)
 
         # ---- 左栏：编译设置 + 打包内容 + 发布 ----
-        left = ctk.CTkFrame(c)
+        left = ctk.CTkFrame(main_card, fg_color="transparent")
         left.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
         left.grid_columnconfigure(1, weight=1)
 
@@ -149,7 +154,8 @@ class BuildTab(ctk.CTkFrame):
         self._add_hint_lbl.grid_remove()
 
         # 条目列表
-        self._item_list = ctk.CTkScrollableFrame(left, fg_color="transparent")
+        # 条目列表（第二层容器：BG2，条目斑马条纹）
+        self._item_list = ctk.CTkScrollableFrame(left, fg_color=BG2)
         self._item_list.grid(row=4, column=0, columnspan=4, sticky="nsew",
                              padx=5, pady=5)
         left.grid_rowconfigure(4, weight=1)
@@ -164,7 +170,7 @@ class BuildTab(ctk.CTkFrame):
         self._area_err_lbl.grid_remove()
 
         # ---- 右栏：发布选项 + 预览 ----
-        right = ctk.CTkFrame(c)
+        right = ctk.CTkFrame(main_card, fg_color="transparent")
         right.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
         right.grid_columnconfigure(0, weight=1)
         right.grid_rowconfigure(3, weight=1)  # 弹性空间给预览 Textbox
@@ -179,7 +185,7 @@ class BuildTab(ctk.CTkFrame):
             row=2, column=0, sticky="nw", padx=10, pady=(10, 5))
         self._preview = ctk.CTkTextbox(right, wrap="word",
                                        font=("Consolas", 12),
-                                       state="disabled")
+                                       state="disabled", fg_color=BG2)
         self._preview.grid(row=3, column=0, sticky="nsew", padx=10,
                            pady=(0, 10))
         self._controls.append(self._preview)
@@ -368,8 +374,7 @@ class BuildTab(ctk.CTkFrame):
             is_entry = "entry" in tags
 
             # 卡片式行（斑马纹交替底色 + 圆角）
-            leave_color = (("gray94", "gray19") if i % 2
-                           else ("gray88", "gray23"))
+            leave_color = (STRIP_A if i % 2 else STRIP_B)
             row = ctk.CTkFrame(
                 self._item_list,
                 fg_color=leave_color,

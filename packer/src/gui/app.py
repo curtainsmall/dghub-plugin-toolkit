@@ -30,7 +30,7 @@ from backend.build_control import Canceller
 from gui.manifest_tab import ManifestTab
 from backend.project_manager import ProjectManager, project_exists
 from gui.settings_tab import SettingsTab
-from gui.widgets import ToolTip
+from gui.widgets import BG0, BG1, BG2, ToolTip
 from backend import settings_store
 
 
@@ -69,7 +69,7 @@ class App(ctk.CTk):
 
         # -- tab view（tab 导航固定；内容区占满顶部栏与日志面板之间，
         #    页面内容 fill 视口，超高时由页面内部滚动自管）--
-        self._tab_view = ctk.CTkTabview(self, anchor="nw")
+        self._tab_view = ctk.CTkTabview(self, anchor="nw", fg_color=BG0)
         self._tab_view.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
 
         # -- tabs --
@@ -130,32 +130,36 @@ class App(ctk.CTk):
     # ------------------------------------------------------------------
 
     def _build_top_bar(self) -> None:
-        bar = ctk.CTkFrame(self, fg_color="transparent")
+        bar = ctk.CTkFrame(self, fg_color=BG0)
         bar.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
-        bar.grid_columnconfigure(1, weight=1)
-    
+        # 插件目录 + 输出目录放入同一浮动卡片（第一层 BG1）
+        card = ctk.CTkFrame(bar, fg_color=BG1, corner_radius=8)
+        card.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+        card.grid_columnconfigure(1, weight=1)
+        bar.grid_columnconfigure(0, weight=1)
+
         BTN_W = 100
-        
+
         # Store buttons for state management
         self._out_btns: list[ctk.CTkButton] = []
-        
-        def _make_dir_row(bar, row, label, text, select_cmd, reset_cmd=None):
+
+        def _make_dir_row(card, row, label, text, select_cmd, reset_cmd=None):
             """Helper to build a uniform directory selector row.
             Returns (frame, lbl, [buttons...]).
             """
-            ctk.CTkLabel(bar, text=label,
+            ctk.CTkLabel(card, text=label,
                          font=ctk.CTkFont(weight="bold")).grid(
-                row=row, column=0, padx=(0, 5), pady=4, sticky="w")
-            frame = ctk.CTkFrame(bar, fg_color=("gray85", "gray25"),
+                row=row, column=0, padx=(10, 5), pady=6, sticky="w")
+            frame = ctk.CTkFrame(card, fg_color=BG2,
                                  border_width=0, corner_radius=6)
-            frame.grid(row=row, column=1, sticky="ew", padx=5, pady=4)
+            frame.grid(row=row, column=1, sticky="ew", padx=5, pady=6)
             frame.grid_columnconfigure(0, weight=1)
             lbl = ctk.CTkLabel(frame, text=text, fg_color="transparent",
                                anchor="w")
             lbl.pack(fill="x", expand=True, padx=8, pady=4)
-        
-            btn_frame = ctk.CTkFrame(bar, fg_color="transparent")
-            btn_frame.grid(row=row, column=2, padx=5, pady=4, sticky="w")
+
+            btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+            btn_frame.grid(row=row, column=2, padx=5, pady=6, sticky="w")
             btn = ctk.CTkButton(btn_frame, text="选择目录", width=BTN_W,
                                 command=select_cmd)
             btn.pack(side="left")
@@ -175,14 +179,14 @@ class App(ctk.CTk):
                 ToolTip(reset_btn, "恢复默认")
                 btns.append(reset_btn)
             return frame, lbl, btns
-        
+
         # Row 0: 插件目录（始终可用）
         self._dir_path_frame, self._dir_label, self._dir_btns = _make_dir_row(
-            bar, 0, "插件目录:", "未选择", self._select_shared_dir)
-        
+            card, 0, "插件目录:", "未选择", self._select_shared_dir)
+
         # Row 1: 输出目录（初始禁用；源码/收集目录已移入构建 tab 各系统视图）
         self._out_path_frame, self._out_label, self._out_btns = _make_dir_row(
-            bar, 1, "输出目录:", "", self._select_output_dir,
+            card, 1, "输出目录:", "", self._select_output_dir,
             reset_cmd=self._reset_output_dir)
         self._out_reset_btn = self._out_btns[1]
         

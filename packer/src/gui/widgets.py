@@ -13,6 +13,15 @@ import customtkinter as ctk
 _FA_FILENAME = "fa-solid-900.ttf"
 _ICON_FAMILY: str | None | bool = False   # False = 尚未探测
 
+# 分层配色（(light, dark) 二元组，全局统一）：
+#   BG0 全局背景（最底层）→ BG1 第一层组件（浮动卡片）→
+#   BG2 第二层（列表/嵌套容器）→ 条目条纹（STRIP_A/B 交替）
+BG0 = ("#E4E4E4", "#1E1E1E")
+BG1 = ("#F7F7F7", "#2E2E2E")
+BG2 = ("#ECECEC", "#252525")
+STRIP_A = ("#FAFAFA", "#343434")
+STRIP_B = ("#F0F0F0", "#2A2A2A")
+
 
 def _fa_path() -> Path:
     meipass = getattr(sys, "_MEIPASS", None)

@@ -9,7 +9,8 @@ import customtkinter as ctk
 
 from backend.manifest_validator import VALID_FIELD_TYPES, validate_manifest
 from backend.project_manager import ProjectManager
-from gui.widgets import FillScrollable, center_dialog, reset_entry_border
+from gui.widgets import (BG1, BG2, STRIP_A, STRIP_B, FillScrollable,
+                         center_dialog, reset_entry_border)
 
 FIELD_TYPE_LABELS: dict[str, str] = {
     "bool": "开关 (bool)",
@@ -111,16 +112,19 @@ class ManifestTab(ctk.CTkFrame):
         #    内容填满视口，日志面板压缩视口时超高内容可滚动 --
         scroll = FillScrollable(self)
         scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        main = scroll.content
-        main.grid_columnconfigure(0, weight=1)              # left 弹性
-        main.grid_columnconfigure(1, weight=0, minsize=360)  # right 固定宽
-        main.grid_rowconfigure(0, weight=1)
+        c = scroll.content
+        # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
+        main_card = ctk.CTkFrame(c, fg_color=BG1, corner_radius=8)
+        main_card.grid(row=0, column=0, sticky="nsew")
+        main_card.grid_columnconfigure(0, weight=1)              # left 弹性
+        main_card.grid_columnconfigure(1, weight=0, minsize=360)  # right 固定宽
+        main_card.grid_rowconfigure(0, weight=1)
 
-        left = ctk.CTkFrame(main)
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left = ctk.CTkFrame(main_card, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
 
-        right = ctk.CTkFrame(main)
-        right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        right = ctk.CTkFrame(main_card, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
         right.grid_rowconfigure(0, weight=1)
         right.grid_columnconfigure(0, weight=1)
 
@@ -145,7 +149,7 @@ class ManifestTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build_basic_info(self, parent: ctk.CTkFrame) -> None:
-        frame = ctk.CTkFrame(parent)
+        frame = ctk.CTkFrame(parent, fg_color="transparent")  # 同卡内色，无间隙
         frame.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(frame, text="基本信息",
                      font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
@@ -209,7 +213,7 @@ class ManifestTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build_capabilities(self, parent: ctk.CTkFrame) -> None:
-        frame = ctk.CTkFrame(parent)
+        frame = ctk.CTkFrame(parent, fg_color="transparent")  # 同卡内色
         frame.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(frame, text="能力声明",
                      font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
@@ -223,27 +227,27 @@ class ManifestTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build_schema_editor(self, parent: ctk.CTkFrame) -> None:
-        frame = ctk.CTkFrame(parent)
+        frame = ctk.CTkFrame(parent, fg_color="transparent")  # 同卡内色
         frame.pack(fill="both", expand=True, pady=(0, 10))
         ctk.CTkLabel(frame, text="Config Schema 编辑器",
                      font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
 
-        # sections area
-        sec_frame = ctk.CTkFrame(frame)
-        sec_frame.pack(fill="both", expand=True, padx=0, pady=(0, 10))
+        # sections area（第二层容器：BG2，列表内容同底色）
+        sec_frame = ctk.CTkFrame(frame, fg_color=BG2, corner_radius=6)
+        sec_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         sec_frame.grid_columnconfigure(0, weight=1)
         sec_frame.grid_columnconfigure(1, weight=1)
         sec_frame.grid_rowconfigure(0, weight=1)
 
-        # left: section list
-        sec_left = ctk.CTkFrame(sec_frame)
+        # left: section list（透明 = 同 BG2）
+        sec_left = ctk.CTkFrame(sec_frame, fg_color="transparent")
         sec_left.grid(row=0, column=0, sticky="nsew")
         sec_left.grid_columnconfigure(0, weight=1)
         sec_left.grid_rowconfigure(1, weight=1)
 
         ctk.CTkLabel(sec_left, text="分组列表",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
-        self._section_container = ctk.CTkScrollableFrame(sec_left)
+        self._section_container = ctk.CTkScrollableFrame(sec_left, fg_color=BG2)
         self._section_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
         self._section_container.grid_columnconfigure(0, weight=1)
 
@@ -256,15 +260,15 @@ class ManifestTab(ctk.CTkFrame):
         for btn in sec_btn_frame.winfo_children():
             self._controls.append(btn)
 
-        # right: fields in selected section
-        sec_right = ctk.CTkFrame(sec_frame)
+        # right: fields in selected section（透明 = 同 BG2）
+        sec_right = ctk.CTkFrame(sec_frame, fg_color="transparent")
         sec_right.grid(row=0, column=1, sticky="nsew")
         sec_right.grid_columnconfigure(0, weight=1)
         sec_right.grid_rowconfigure(1, weight=1)
 
         ctk.CTkLabel(sec_right, text="字段列表 (Fields)",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
-        self._field_container = ctk.CTkScrollableFrame(sec_right)
+        self._field_container = ctk.CTkScrollableFrame(sec_right, fg_color=BG2)
         self._field_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
         self._field_container.grid_columnconfigure(0, weight=1)
 
@@ -350,8 +354,7 @@ class ManifestTab(ctk.CTkFrame):
         """轻量更新字段行高亮（不整列重渲染，避免破坏双击编辑）。"""
         for j, row in enumerate(self._field_buttons):
             sel = (j == self._selected_field)
-            leave = (("gray94", "gray19") if j % 2
-                     else ("gray88", "gray23"))
+            leave = (STRIP_A if j % 2 else STRIP_B)
             row.configure(fg_color=("#2B6EA6" if sel else leave))
 
     def _edit_field_at(self, idx: int) -> None:
@@ -378,8 +381,7 @@ class ManifestTab(ctk.CTkFrame):
             n_fields = len(sec.get("fields", []))
 
             # 卡片式行（斑马纹 + 圆角；选中整行蓝底）
-            leave_color = (("gray94", "gray19") if i % 2
-                           else ("gray88", "gray23"))
+            leave_color = (STRIP_A if i % 2 else STRIP_B)
             row = ctk.CTkFrame(
                 self._section_container,
                 fg_color=("#2B6EA6" if selected else leave_color),
@@ -436,8 +438,7 @@ class ManifestTab(ctk.CTkFrame):
 
             # 卡片式行（斑马纹 + 圆角；选中行蓝底，与分组列表一致）
             selected = (j == self._selected_field)
-            leave_color = (("gray94", "gray19") if j % 2
-                           else ("gray88", "gray23"))
+            leave_color = (STRIP_A if j % 2 else STRIP_B)
             row = ctk.CTkFrame(
                 self._field_container,
                 fg_color=("#2B6EA6" if selected else leave_color),
@@ -651,7 +652,7 @@ class ManifestTab(ctk.CTkFrame):
                       command=self._add_option_detail).pack(side="right")
         self._options_container = ctk.CTkScrollableFrame(
             self._detail_options_row,
-            fg_color=("gray87", "gray20"), corner_radius=6,
+            fg_color=BG2, corner_radius=6,
             height=140)
         self._options_container.grid(row=1, column=0, sticky="ew",
                                      padx=(95, 0))
@@ -822,8 +823,7 @@ class ManifestTab(ctk.CTkFrame):
         self._options_buttons.clear()
         hover_color = ("#D6E4F2", "gray28")
         for i, (val, lbl) in enumerate(self._detail_options):
-            leave_color = (("gray94", "gray19") if i % 2
-                           else ("gray88", "gray23"))
+            leave_color = (STRIP_A if i % 2 else STRIP_B)
             row = ctk.CTkFrame(self._options_container,
                                fg_color=leave_color, corner_radius=6)
             row.pack(fill="x", padx=2, pady=2)

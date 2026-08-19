@@ -12,6 +12,7 @@ from backend import settings_store
 from backend.updater import (DownloadCancelled, check_latest,
                              cleanup_stale_installers, download_installer,
                              get_current_version, is_newer, update_dest)
+from gui.widgets import BG1
 
 try:
     from backend._version import __version__ as APP_VERSION  # type: ignore[reportMissingImports]
@@ -145,11 +146,15 @@ class SettingsTab(ctk.CTkFrame):
         self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self._scroll.grid(row=0, column=0, sticky="nsew")
         self._scroll.grid_columnconfigure(0, weight=1)
+        # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
+        card = ctk.CTkFrame(self._scroll, fg_color=BG1, corner_radius=8)
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        card.grid_columnconfigure(0, weight=1)
 
         row = 0
 
         # -- App Info --
-        info_frame = ctk.CTkFrame(self._scroll)
+        info_frame = ctk.CTkFrame(card, fg_color="transparent")
         info_frame.grid(row=row, column=0, sticky="ew",
                         padx=10, pady=(2, 5))
         info_frame.grid_columnconfigure(1, weight=1)
@@ -180,7 +185,7 @@ class SettingsTab(ctk.CTkFrame):
                 text_color=("gray30", "gray70"))
 
         # -- Theme --
-        theme_frame = ctk.CTkFrame(self._scroll)
+        theme_frame = ctk.CTkFrame(card, fg_color="transparent")
         theme_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -198,7 +203,7 @@ class SettingsTab(ctk.CTkFrame):
         ctk.set_appearance_mode("dark")
 
         # -- Build (PyPI index) --
-        build_frame = ctk.CTkFrame(self._scroll)
+        build_frame = ctk.CTkFrame(card, fg_color="transparent")
         build_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -256,7 +261,7 @@ class SettingsTab(ctk.CTkFrame):
                padx=10, pady=(0, 10))
 
         # -- Debug (DGHub host/port) --
-        runtime_frame = ctk.CTkFrame(self._scroll)
+        runtime_frame = ctk.CTkFrame(card, fg_color="transparent")
         runtime_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -291,7 +296,7 @@ class SettingsTab(ctk.CTkFrame):
                padx=10, pady=(0, 10))
 
         # -- Reset defaults --
-        reset_frame = ctk.CTkFrame(self._scroll)
+        reset_frame = ctk.CTkFrame(card, fg_color="transparent")
         reset_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -303,7 +308,7 @@ class SettingsTab(ctk.CTkFrame):
             row=0, column=1, sticky="w", padx=(0, 10), pady=10)
 
         # -- License --
-        license_frame = ctk.CTkFrame(self._scroll)
+        license_frame = ctk.CTkFrame(card, fg_color="transparent")
         license_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
@@ -319,7 +324,7 @@ class SettingsTab(ctk.CTkFrame):
         ).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 10))
 
         # -- Links（置于页面底部）--
-        link_frame = ctk.CTkFrame(self._scroll)
+        link_frame = ctk.CTkFrame(card, fg_color="transparent")
         link_frame.grid(row=row, column=0, sticky="ew", padx=10, pady=5)
         row += 1
 
