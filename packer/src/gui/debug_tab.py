@@ -26,7 +26,7 @@ from backend.logbus import Logger
 from backend.pipeline import BuildContext
 from backend.project_manager import ProjectManager
 from gui.ui_dispatch import ui
-from gui.widgets import BG1, FillScrollable
+from gui.widgets import BG0, BG1, FillScrollable
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -38,7 +38,7 @@ class DebugTab(ctk.CTkFrame):
     def __init__(self, master: Any, logger: Logger,
                  on_state_change: Any | None = None,
                  **kwargs: Any) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color=BG0, **kwargs)
         self._pm: ProjectManager | None = None
         self._plugin_dir: str | None = None
         self._logger = logger

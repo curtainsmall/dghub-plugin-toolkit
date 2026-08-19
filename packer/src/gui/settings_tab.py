@@ -12,7 +12,7 @@ from backend import settings_store
 from backend.updater import (DownloadCancelled, check_latest,
                              cleanup_stale_installers, download_installer,
                              get_current_version, is_newer, update_dest)
-from gui.widgets import BG1
+from gui.widgets import BG0, BG1
 
 try:
     from backend._version import __version__ as APP_VERSION  # type: ignore[reportMissingImports]
@@ -55,7 +55,7 @@ class SettingsTab(ctk.CTkFrame):
                  on_pypi_index_changed: Callable[[str], None] | None = None,
                  on_suffix_changed: Callable[[], None] | None = None,
                  **kwargs: Any) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color=BG0, **kwargs)
         self._on_pypi_index_changed = on_pypi_index_changed
         self._on_suffix_changed_cb = on_suffix_changed
         self._host_var = ctk.StringVar(value=self._DEFAULT_HOST)

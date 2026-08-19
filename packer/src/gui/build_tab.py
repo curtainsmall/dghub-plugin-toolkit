@@ -17,7 +17,7 @@ from backend.builder import Builder, BuilderItem, evaluate_pattern
 from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
 from gui.compile_tab import CompileTab
-from gui.widgets import (BG1, BG2, STRIP_A, STRIP_B, FillScrollable,
+from gui.widgets import (BG0, BG1, STRIP_A, STRIP_B, FillScrollable,
                          center_dialog, reset_entry_border)
 
 # 右栏各行统一的前导标签宽度（像素）
@@ -44,7 +44,7 @@ class BuildTab(ctk.CTkFrame):
                  on_error_cleared: Callable[[], None] | None = None,
                  on_build_clicked: Callable[[], None] | None = None,
                  **kwargs: Any) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color=BG0, **kwargs)
         self._pm: ProjectManager | None = None
         self._plugin_dir: str | None = None
         self._loading = False
@@ -154,8 +154,8 @@ class BuildTab(ctk.CTkFrame):
         self._add_hint_lbl.grid_remove()
 
         # 条目列表
-        # 条目列表（第二层容器：BG2，条目斑马条纹）
-        self._item_list = ctk.CTkScrollableFrame(left, fg_color=BG2)
+        # 条目列表（卡片内直接呈现，条目斑马条纹）
+        self._item_list = ctk.CTkScrollableFrame(left, fg_color="transparent")
         self._item_list.grid(row=4, column=0, columnspan=4, sticky="nsew",
                              padx=5, pady=5)
         left.grid_rowconfigure(4, weight=1)
@@ -181,7 +181,7 @@ class BuildTab(ctk.CTkFrame):
             row=0, column=0, sticky="nw", padx=10, pady=(10, 5))
         self._preview = ctk.CTkTextbox(right, wrap="word",
                                        font=("Consolas", 12),
-                                       state="disabled", fg_color=BG2)
+                                       state="disabled", fg_color="transparent")
         self._preview.grid(row=1, column=0, sticky="nsew", padx=10,
                            pady=(0, 10))
         self._controls.append(self._preview)

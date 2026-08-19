@@ -80,10 +80,15 @@ class FillScrollable(ctk.CTkFrame):
     """
 
     def __init__(self, master: Any, **kwargs: Any) -> None:
+        # 容器自身 = 全局背景（BG0）：content 的 transparent 会解析为
+        # 父背景——若容器用默认主题色，content 会显示多余的深灰层
+        kwargs.setdefault("fg_color", BG0)
         super().__init__(master, **kwargs)
         self._scrollbar = ctk.CTkScrollbar(self)
         self._scrollbar.pack(side="right", fill="y")
-        self._canvas = ctk.CTkCanvas(self, highlightthickness=0)
+        # canvas 背景必须显式 = 全局背景（默认白色会露出白边框）
+        bg = BG0[1] if ctk.get_appearance_mode() == "Dark" else BG0[0]
+        self._canvas = ctk.CTkCanvas(self, highlightthickness=0, bg=bg)
         self._canvas.pack(side="left", fill="both", expand=True)
         self._canvas.configure(yscrollcommand=self._scrollbar.set)
         self._scrollbar.configure(command=self._canvas.yview)

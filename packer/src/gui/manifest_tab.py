@@ -9,7 +9,7 @@ import customtkinter as ctk
 
 from backend.manifest_validator import VALID_FIELD_TYPES, validate_manifest
 from backend.project_manager import ProjectManager
-from gui.widgets import (BG1, BG2, STRIP_A, STRIP_B, FillScrollable,
+from gui.widgets import (BG0, BG1, STRIP_A, STRIP_B, FillScrollable,
                          center_dialog, reset_entry_border)
 
 FIELD_TYPE_LABELS: dict[str, str] = {
@@ -64,7 +64,7 @@ class ManifestTab(ctk.CTkFrame):
     def __init__(self, master: Any,
                  on_field_edit: Callable[[str], None] | None = None,
                  **kwargs: Any) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color=BG0, **kwargs)
         # internal data
         self._sections: list[dict[str, Any]] = []
         self._section_buttons: list[ctk.CTkFrame] = []
@@ -111,7 +111,7 @@ class ManifestTab(ctk.CTkFrame):
         # -- main area: left (form) + right (preview)——
         #    内容填满视口，日志面板压缩视口时超高内容可滚动 --
         scroll = FillScrollable(self)
-        scroll.pack(fill="both", expand=True, padx=10, pady=10)
+        scroll.pack(fill="both", expand=True)
         c = scroll.content
         # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
         main_card = ctk.CTkFrame(c, fg_color=BG1, corner_radius=8)
@@ -135,14 +135,6 @@ class ManifestTab(ctk.CTkFrame):
 
         # -- right side: field detail (editable) --
         self._build_field_detail(right)
-
-        # -- bottom bar（固定底部，scroll 占剩余空间）--
-        bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
-        bottom.grid_columnconfigure(0, weight=1)
-
-        self._error_label = ctk.CTkLabel(bottom, text="", text_color="red")
-        self._error_label.pack(side="right", padx=5)
 
     # ------------------------------------------------------------------
     # basic info
@@ -232,14 +224,14 @@ class ManifestTab(ctk.CTkFrame):
         ctk.CTkLabel(frame, text="Config Schema 编辑器",
                      font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
 
-        # sections area（第二层容器：BG2，列表内容同底色）
-        sec_frame = ctk.CTkFrame(frame, fg_color=BG2, corner_radius=6)
+        # sections area（卡片内直接呈现，条目斑马条纹）
+        sec_frame = ctk.CTkFrame(frame, fg_color="transparent")
         sec_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         sec_frame.grid_columnconfigure(0, weight=1)
         sec_frame.grid_columnconfigure(1, weight=1)
         sec_frame.grid_rowconfigure(0, weight=1)
 
-        # left: section list（透明 = 同 BG2）
+        # left: section list（同卡片）
         sec_left = ctk.CTkFrame(sec_frame, fg_color="transparent")
         sec_left.grid(row=0, column=0, sticky="nsew")
         sec_left.grid_columnconfigure(0, weight=1)
@@ -247,7 +239,8 @@ class ManifestTab(ctk.CTkFrame):
 
         ctk.CTkLabel(sec_left, text="分组列表",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
-        self._section_container = ctk.CTkScrollableFrame(sec_left, fg_color=BG2)
+        self._section_container = ctk.CTkScrollableFrame(
+            sec_left, fg_color="transparent")
         self._section_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
         self._section_container.grid_columnconfigure(0, weight=1)
 
@@ -260,7 +253,7 @@ class ManifestTab(ctk.CTkFrame):
         for btn in sec_btn_frame.winfo_children():
             self._controls.append(btn)
 
-        # right: fields in selected section（透明 = 同 BG2）
+        # right: fields in selected section（同卡片）
         sec_right = ctk.CTkFrame(sec_frame, fg_color="transparent")
         sec_right.grid(row=0, column=1, sticky="nsew")
         sec_right.grid_columnconfigure(0, weight=1)
@@ -268,7 +261,8 @@ class ManifestTab(ctk.CTkFrame):
 
         ctk.CTkLabel(sec_right, text="字段列表 (Fields)",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
-        self._field_container = ctk.CTkScrollableFrame(sec_right, fg_color=BG2)
+        self._field_container = ctk.CTkScrollableFrame(
+            sec_right, fg_color="transparent")
         self._field_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
         self._field_container.grid_columnconfigure(0, weight=1)
 
@@ -502,7 +496,6 @@ class ManifestTab(ctk.CTkFrame):
         if sec is None:
             self._field_error_label.configure(text="请先选择一个分组")
             self._field_error_label.grid(row=0, column=0)
-            self._error_label.configure(text="", text_color="red")
             return
         # 直接创建默认字段并加入列表、选中（随后在详情面板编辑）
         n = 1
@@ -652,7 +645,7 @@ class ManifestTab(ctk.CTkFrame):
                       command=self._add_option_detail).pack(side="right")
         self._options_container = ctk.CTkScrollableFrame(
             self._detail_options_row,
-            fg_color=BG2, corner_radius=6,
+            fg_color="transparent", corner_radius=6,
             height=140)
         self._options_container.grid(row=1, column=0, sticky="ew",
                                      padx=(95, 0))

@@ -31,7 +31,7 @@ from backend.build_control import Canceller
 from gui.manifest_tab import ManifestTab
 from backend.project_manager import ProjectManager, project_exists
 from gui.settings_tab import SettingsTab
-from gui.widgets import BG0, BG1, BG2, ToolTip
+from gui.widgets import BG0, BG1, ToolTip
 from backend import settings_store
 
 
@@ -155,7 +155,7 @@ class App(ctk.CTk):
             ctk.CTkLabel(card, text=label, font=ctk.CTkFont(weight="bold")).grid(
                 row=row, column=0, padx=(10, 5), pady=6, sticky="w"
             )
-            frame = ctk.CTkFrame(card, fg_color=BG2, border_width=0, corner_radius=6)
+            frame = ctk.CTkFrame(card, fg_color="transparent", border_width=0, corner_radius=6)
             frame.grid(row=row, column=1, sticky="ew", padx=5, pady=6)
             frame.grid_columnconfigure(0, weight=1)
             lbl = ctk.CTkLabel(frame, text=text, fg_color="transparent", anchor="w")
