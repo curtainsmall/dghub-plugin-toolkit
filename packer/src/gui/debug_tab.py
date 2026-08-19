@@ -79,12 +79,18 @@ class DebugTab(ctk.CTkFrame):
         # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
         main_card = ctk.CTkFrame(c, fg_color=BG1, corner_radius=8)
         main_card.pack(fill="both", expand=True, padx=8, pady=8)
-        main_card.grid_columnconfigure(1, weight=1)
+        main_card.grid_columnconfigure(0, weight=1)
+        main_card.grid_rowconfigure(0, weight=1)
+        # 内容容器（水平 padding 与信息页一致：栏 10 + 行内 10 = 20）
+        body = ctk.CTkFrame(main_card, fg_color="transparent")
+        body.grid(row=0, column=0, sticky="nsew", padx=(20, 20),
+                  pady=(0, 10))
+        body.grid_columnconfigure(1, weight=1)
 
         # ---- row 0: 检测 DGHub ----
-        row = ctk.CTkFrame(main_card, fg_color="transparent")
+        row = ctk.CTkFrame(body, fg_color="transparent")
         row.grid(row=0, column=0, columnspan=2, sticky="ew",
-                 padx=10, pady=(10, 0))
+                 pady=(10, 0))
         row.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(row, text="调试", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(weight="bold")).grid(
@@ -102,9 +108,9 @@ class DebugTab(ctk.CTkFrame):
         self._detect_hint.pack(side="left", padx=(8, 0))
 
         # ---- row 1: 启动/停止 + 状态 ----
-        bottom = ctk.CTkFrame(main_card, fg_color="transparent")
+        bottom = ctk.CTkFrame(body, fg_color="transparent")
         bottom.grid(row=1, column=0, columnspan=2, sticky="ew",
-                    padx=10, pady=(12, 0))
+                    pady=(10, 0))
         bottom.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(bottom, text="操作", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(weight="bold")).grid(
@@ -128,11 +134,11 @@ class DebugTab(ctk.CTkFrame):
 
         # ---- row 2: 动态提示行（模式说明 / 校验结果） ----
         self._hint_lbl = ctk.CTkLabel(
-            main_card, text="", font=ctk.CTkFont(size=11),
+            body, text="", font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"), anchor="w",
             wraplength=640, justify="left")
         self._hint_lbl.grid(row=2, column=0, columnspan=2, sticky="ew",
-                            padx=(10, 10), pady=(8, 0))
+                            pady=(10, 0))
 
     # ------------------------------------------------------------------
     # 状态与提示

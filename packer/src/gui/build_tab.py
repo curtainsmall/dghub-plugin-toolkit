@@ -91,7 +91,7 @@ class BuildTab(ctk.CTkFrame):
 
         # ---- 左栏：编译设置 + 打包内容 + 发布 ----
         left = ctk.CTkFrame(main_card, fg_color="transparent")
-        left.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
+        left.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
         left.grid_columnconfigure(1, weight=1)
 
         # 编译设置（完全平铺：编译系统 / 依赖清单 / 产物模式，
@@ -100,7 +100,7 @@ class BuildTab(ctk.CTkFrame):
             left, fg_color="transparent",
             on_changed=self._on_compile_inner_changed)
         self._compile_view.grid(row=0, column=0, columnspan=4,
-                                sticky="ew", padx=0, pady=(10, 0))
+                                sticky="ew", padx=0)
 
         # 包名（自定义输出包名；留空 = 自动：插件目录名）
         ctk.CTkLabel(left, text="包名", width=_LABEL_W, anchor="w",
@@ -171,7 +171,7 @@ class BuildTab(ctk.CTkFrame):
 
         # ---- 右栏：输出文件预览 + 构建按钮 ----
         right = ctk.CTkFrame(main_card, fg_color="transparent")
-        right.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
+        right.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
         right.grid_columnconfigure(0, weight=1)
         right.grid_rowconfigure(1, weight=1)  # 弹性空间给预览 Textbox
 
