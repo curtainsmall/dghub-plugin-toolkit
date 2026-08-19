@@ -245,10 +245,9 @@ class ManifestTab(ctk.CTkFrame):
 
         ctk.CTkLabel(sec_left, text="分组列表",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
-        self._section_container = ctk.CTkScrollableFrame(
-            sec_left, fg_color=LIST_BG)
+        self._section_container = FillScrollable(sec_left, fill_bg=LIST_BG)
         self._section_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
-        self._section_container.grid_columnconfigure(0, weight=1)
+        self._section_container.content.grid_columnconfigure(0, weight=1)
 
         sec_btn_frame = ctk.CTkFrame(sec_left, fg_color="transparent")
         sec_btn_frame.grid(row=2, column=0, pady=5)
@@ -267,13 +266,12 @@ class ManifestTab(ctk.CTkFrame):
 
         ctk.CTkLabel(sec_right, text="字段列表",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
-        self._field_container = ctk.CTkScrollableFrame(
-            sec_right, fg_color=LIST_BG)
+        self._field_container = FillScrollable(sec_right, fill_bg=LIST_BG)
         self._field_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
-        self._field_container.grid_columnconfigure(0, weight=1)
+        self._field_container.content.grid_columnconfigure(0, weight=1)
 
         self._field_error_label = ctk.CTkLabel(
-            self._field_container, text="",
+            self._field_container.content, text="",
             text_color="red", anchor="center",
             font=ctk.CTkFont(size=12))
         # 初始隐藏，有错误时才显示
@@ -389,7 +387,7 @@ class ManifestTab(ctk.CTkFrame):
             # 卡片式行（斑马纹 + 圆角；选中整行蓝底）
             leave_color = (STRIP_A if i % 2 else STRIP_B)
             row = ctk.CTkFrame(
-                self._section_container,
+                self._section_container.content,
                 fg_color=("#2B6EA6" if selected else leave_color),
                 corner_radius=6)
             row.grid(row=i + 1, column=0, sticky="ew", padx=2, pady=2)
@@ -446,7 +444,7 @@ class ManifestTab(ctk.CTkFrame):
             selected = (j == self._selected_field)
             leave_color = (STRIP_A if j % 2 else STRIP_B)
             row = ctk.CTkFrame(
-                self._field_container,
+                self._field_container.content,
                 fg_color=("#2B6EA6" if selected else leave_color),
                 corner_radius=6)
             row.grid(row=j + 1, column=0, sticky="ew", padx=2, pady=2)
@@ -655,13 +653,11 @@ class ManifestTab(ctk.CTkFrame):
                      anchor="w").pack(side="left")
         ctk.CTkButton(opts_head, text="+ 添加选项", width=80, height=22,
                       command=self._add_option_detail).pack(side="right")
-        self._options_container = ctk.CTkScrollableFrame(
-            self._detail_options_row,
-            fg_color=LIST_BG, corner_radius=6,
-            height=140)
+        self._options_container = FillScrollable(
+            self._detail_options_row, fill_bg=LIST_BG, height=140)
         self._options_container.grid(row=1, column=0, sticky="ew",
                                      padx=(95, 0))
-        self._options_container.grid_columnconfigure(0, weight=1)
+        self._options_container.content.grid_columnconfigure(0, weight=1)
         self._options_buttons: list[ctk.CTkFrame] = []
         self._detail_row_frames["options"] = self._detail_options_row
 
@@ -829,7 +825,7 @@ class ManifestTab(ctk.CTkFrame):
         hover_color = ("#D6E4F2", "gray28")
         for i, (val, lbl) in enumerate(self._detail_options):
             leave_color = (STRIP_A if i % 2 else STRIP_B)
-            row = ctk.CTkFrame(self._options_container,
+            row = ctk.CTkFrame(self._options_container.content,
                                fg_color=leave_color, corner_radius=6)
             row.pack(fill="x", padx=2, pady=2)
             row.grid_columnconfigure(1, weight=1)

@@ -153,9 +153,9 @@ class BuildTab(ctk.CTkFrame):
                                 padx=5)
         self._add_hint_lbl.grid_remove()
 
-        # 条目列表
-        # 条目列表（卡片内凹陷区：LIST_BG，条目斑马条纹）
-        self._item_list = ctk.CTkScrollableFrame(left, fg_color=LIST_BG)
+        # 条目列表（卡片内凹陷区：LIST_BG，条目斑马条纹；
+        # FillScrollable 统一滚动实现）
+        self._item_list = FillScrollable(left, fill_bg=LIST_BG)
         self._item_list.grid(row=4, column=0, columnspan=4, sticky="nsew",
                              padx=5, pady=5)
         left.grid_rowconfigure(4, weight=1)
@@ -356,7 +356,7 @@ class BuildTab(ctk.CTkFrame):
         dlg.wait_window()
 
     def _refresh_item_list(self) -> None:
-        for w in self._item_list.winfo_children():
+        for w in self._item_list.content.winfo_children():
             w.destroy()
         b = self._builder()
         if b is None:
@@ -372,7 +372,7 @@ class BuildTab(ctk.CTkFrame):
             # 卡片式行（斑马纹交替底色 + 圆角）
             leave_color = (STRIP_A if i % 2 else STRIP_B)
             row = ctk.CTkFrame(
-                self._item_list,
+                self._item_list.content,
                 fg_color=leave_color,
                 corner_radius=6)
             row.pack(fill="x", padx=2, pady=2)
