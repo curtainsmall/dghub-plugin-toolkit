@@ -84,7 +84,7 @@ class BuildTab(ctk.CTkFrame):
         # 第一层浮动卡片（BG1）：tab 全部内容包在一个 frame 中，
         # 浮在全局背景（BG0）上；内部双栏透明（同 BG1，无间隙）
         main_card = ctk.CTkFrame(c, fg_color=BG1, corner_radius=8)
-        main_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        main_card.pack(fill="both", expand=True, padx=8, pady=8)
         main_card.grid_columnconfigure(0, weight=3)
         main_card.grid_columnconfigure(1, weight=2)
         main_card.grid_rowconfigure(0, weight=1)

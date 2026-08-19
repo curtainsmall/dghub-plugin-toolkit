@@ -78,7 +78,7 @@ class DebugTab(ctk.CTkFrame):
         c = scroll.content
         # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
         main_card = ctk.CTkFrame(c, fg_color=BG1, corner_radius=8)
-        main_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        main_card.pack(fill="both", expand=True, padx=8, pady=8)
         main_card.grid_columnconfigure(1, weight=1)
 
         # ---- row 0: 检测 DGHub ----

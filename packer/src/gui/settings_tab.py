@@ -148,7 +148,7 @@ class SettingsTab(ctk.CTkFrame):
         self._scroll.grid_columnconfigure(0, weight=1)
         # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
         card = ctk.CTkFrame(self._scroll, fg_color=BG1, corner_radius=8)
-        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        card.pack(fill="both", expand=True, padx=8, pady=8)
         card.grid_columnconfigure(0, weight=1)
 
         row = 0
