@@ -79,7 +79,7 @@ class BuildTab(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
         # 页面级滚动（内容填满视口，日志面板压缩时超高内容可滚动）
         scroll = FillScrollable(self)
-        scroll.grid(row=0, column=0, sticky="nsew")
+        scroll.pack(fill="both", expand=True)
         c = scroll.content
         # 第一层浮动卡片（BG1）：tab 全部内容包在一个 frame 中，
         # 浮在全局背景（BG0）上；内部双栏透明（同 BG1，无间隙）
@@ -169,30 +169,26 @@ class BuildTab(ctk.CTkFrame):
                                 padx=5)
         self._area_err_lbl.grid_remove()
 
-        # ---- 右栏：发布选项 + 预览 ----
+        # ---- 右栏：输出文件预览 + 构建按钮 ----
         right = ctk.CTkFrame(main_card, fg_color="transparent")
         right.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
         right.grid_columnconfigure(0, weight=1)
-        right.grid_rowconfigure(3, weight=1)  # 弹性空间给预览 Textbox
-
-        ctk.CTkLabel(right, text="发布选项",
-                     font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=0, column=0, sticky="w", padx=10, pady=(10, 5))
+        right.grid_rowconfigure(1, weight=1)  # 弹性空间给预览 Textbox
 
         # 输出文件预览
         ctk.CTkLabel(right, text="输出文件预览",
                      font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=2, column=0, sticky="nw", padx=10, pady=(10, 5))
+            row=0, column=0, sticky="nw", padx=10, pady=(10, 5))
         self._preview = ctk.CTkTextbox(right, wrap="word",
                                        font=("Consolas", 12),
                                        state="disabled", fg_color=BG2)
-        self._preview.grid(row=3, column=0, sticky="nsew", padx=10,
+        self._preview.grid(row=1, column=0, sticky="nsew", padx=10,
                            pady=(0, 10))
         self._controls.append(self._preview)
 
         # 构建按钮行（右栏底部）：开始构建 + 状态
         build_row = ctk.CTkFrame(right, fg_color="transparent")
-        build_row.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 12))
+        build_row.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 12))
         build_row.grid_columnconfigure(0, weight=1)
         self._build_status = ctk.CTkLabel(build_row, text="",
                                           font=ctk.CTkFont(size=12),

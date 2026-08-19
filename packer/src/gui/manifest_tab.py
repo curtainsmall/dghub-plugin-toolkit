@@ -111,7 +111,7 @@ class ManifestTab(ctk.CTkFrame):
         # -- main area: left (form) + right (preview)——
         #    内容填满视口，日志面板压缩视口时超高内容可滚动 --
         scroll = FillScrollable(self)
-        scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        scroll.pack(fill="both", expand=True, padx=10, pady=10)
         c = scroll.content
         # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
         main_card = ctk.CTkFrame(c, fg_color=BG1, corner_radius=8)
@@ -136,9 +136,9 @@ class ManifestTab(ctk.CTkFrame):
         # -- right side: field detail (editable) --
         self._build_field_detail(right)
 
-        # -- bottom bar --
+        # -- bottom bar（固定底部，scroll 占剩余空间）--
         bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
+        bottom.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
         bottom.grid_columnconfigure(0, weight=1)
 
         self._error_label = ctk.CTkLabel(bottom, text="", text_color="red")

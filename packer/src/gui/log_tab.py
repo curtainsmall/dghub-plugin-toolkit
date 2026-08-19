@@ -99,6 +99,10 @@ class LogTab(ctk.CTkFrame):
         self._build_pane.pack(fill="both", expand=True)
         self._debug_pane.pack(fill="both", expand=True)
 
+        # 初始化时按持久化状态应用显隐（否则折叠状态与 UI 脱节）
+        if not self._open:
+            self._tabs.grid_remove()
+            self._clear_btn.grid_remove()
         self._refresh_header()
 
     # ------------------------------------------------------------------
@@ -125,8 +129,12 @@ class LogTab(ctk.CTkFrame):
         settings_store.save_state_key("log_panel_open", self._open)
         if self._open:
             self._tabs.grid()
+            self._clear_btn.grid(row=0, column=1, sticky="e",
+                                 padx=(0, 10), pady=(6, 0))
         else:
+            # 折叠时隐藏清空按钮——防止误触清空日志
             self._tabs.grid_remove()
+            self._clear_btn.grid_remove()
         self._refresh_header()
 
     def _clear_current(self) -> None:

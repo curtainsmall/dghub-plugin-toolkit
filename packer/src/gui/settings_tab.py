@@ -144,7 +144,7 @@ class SettingsTab(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
         # 内容过长：整体放入滚动容器
         self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self._scroll.grid(row=0, column=0, sticky="nsew")
+        self._scroll.pack(fill="both", expand=True)
         self._scroll.grid_columnconfigure(0, weight=1)
         # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
         card = ctk.CTkFrame(self._scroll, fg_color=BG1, corner_radius=8)
