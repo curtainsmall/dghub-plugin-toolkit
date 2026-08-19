@@ -68,29 +68,39 @@ def icon_font(size: int = 14) -> ctk.CTkFont:
     return ctk.CTkFont(size=size)
 
 
-class FillScrollable(ctk.CTkScrollableFrame):
+class FillScrollable(ctk.CTkFrame):
     """内容填满视口的滚动容器：内容 ≤ 视口时铺满，内容超高时滚动。
 
-    CTkScrollableFrame 的内容按自然尺寸（canvas 窗口 anchor=nw 不拉伸）
-    ——本类在 canvas <Configure> 时把内容框架最小尺寸同步为视口，
-    实现「fill + 可滚动」：页面内容始终占满可视区域，超高时出现滚动条。
+    CTkScrollableFrame 的窗口项尺寸由内部 canvas 锁定（不随父容器
+    伸缩），无法实现 fill——这里用 CTkFrame + Canvas + Scrollbar 自控：
+    canvas <Configure> 时把内容窗口设为「视口宽 × max(内容, 视口高)」，
+    内容始终占满可视区域，超高时出现滚动条。
     用法：``fs = FillScrollable(parent); fs.pack(...)``，内容 grid/pack
-    到 ``fs.content``（不要直接挂到 fs 上）。
+    到 ``fs.content``。
     """
 
     def __init__(self, master: Any, **kwargs: Any) -> None:
         super().__init__(master, **kwargs)
-        self.content = ctk.CTkFrame(self, fg_color="transparent")
-        self.content.pack(fill="both", expand=True)
-        self._parent_canvas.bind("<Configure>", self._sync_fill, add="+")
+        self._scrollbar = ctk.CTkScrollbar(self)
+        self._scrollbar.pack(side="right", fill="y")
+        self._canvas = ctk.CTkCanvas(self, highlightthickness=0)
+        self._canvas.pack(side="left", fill="both", expand=True)
+        self._canvas.configure(yscrollcommand=self._scrollbar.set)
+        self._scrollbar.configure(command=self._canvas.yview)
+        self.content = ctk.CTkFrame(self._canvas, fg_color="transparent")
+        self._window = self._canvas.create_window(
+            (0, 0), window=self.content, anchor="nw")
+        self._canvas.bind("<Configure>", self._sync_fill, add="+")
 
     def _sync_fill(self, _event: Any = None) -> None:
         try:
-            vw = self._parent_canvas.winfo_width()
-            vh = self._parent_canvas.winfo_height()
-            self.content.configure(
-                width=max(self.content.winfo_reqwidth(), vw),
-                height=max(self.content.winfo_reqheight(), vh))
+            vw = self._canvas.winfo_width()
+            vh = self._canvas.winfo_height()
+            ch = max(self.content.winfo_reqheight(), vh)
+            self._canvas.itemconfigure(self._window, width=vw, height=ch)
+            self.content.configure(width=vw, height=ch)
+            self._canvas.configure(
+                scrollregion=(0, 0, vw, max(ch, vh)))
         except Exception:
             pass
 

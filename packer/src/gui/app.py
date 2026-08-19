@@ -16,6 +16,7 @@ def _norm_dir(p: str | Path) -> str:
     """显示用目录路径：正斜杠 + 尾部 "/"。"""
     return _norm(str(p)).rstrip("/") + "/"
 
+
 import customtkinter as ctk
 
 from gui.build_tab import BuildTab
@@ -38,14 +39,14 @@ class App(ctk.CTk):
     """DGHub SDK Packer main window."""
 
     TITLE = "DGHub SDK Packer"
-    WINDOW_SIZE = "1400x1000"
+    WINDOW_SIZE = "1400x1100"
 
     def __init__(self) -> None:
         super().__init__()
 
         self.title(self.TITLE)
         self.geometry(self.WINDOW_SIZE)
-        self.minsize(1400, 1000)
+        self.minsize(1400, 1100)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
@@ -62,6 +63,7 @@ class App(ctk.CTk):
 
         # -- 线程安全 UI 调度（后台线程更新 UI 必须经此）--
         import gui.ui_dispatch as ui_dispatch
+
         ui_dispatch.init(self)
 
         # -- top bar (cross-tab) --
@@ -80,14 +82,16 @@ class App(ctk.CTk):
 
         # -- populate tabs --
         self._info_view = ManifestTab(
-            self._info_tab, on_field_edit=self._on_info_field_edit)
+            self._info_tab, on_field_edit=self._on_info_field_edit
+        )
         self._info_view.pack(fill="both", expand=True)
 
         self._dist_view = BuildTab(
             self._dist_tab,
             on_compile_changed=self._on_compile_changed,
             on_error_cleared=self._on_dist_errors_cleared,
-            on_build_clicked=self._start_build)
+            on_build_clicked=self._start_build,
+        )
         self._dist_view.pack(fill="both", expand=True)
 
         # -- bottom: 全局日志面板（构建/调试双输出，可折叠）--
@@ -97,15 +101,17 @@ class App(ctk.CTk):
         self._debug_logger = Logger(self._log_view.emit_debug)
 
         self._debug_view = DebugTab(
-            self._debug_tab, logger=self._debug_logger,
-            on_state_change=self._on_debug_state_changed)
+            self._debug_tab,
+            logger=self._debug_logger,
+            on_state_change=self._on_debug_state_changed,
+        )
         self._debug_view.pack(fill="both", expand=True)
 
         self._settings_view = SettingsTab(
             self._settings_tab,
-            on_pypi_index_changed=lambda url: self._save_state_key(
-                "pypi_index", url),
-            on_suffix_changed=lambda: self._dist_view.refresh_preview())
+            on_pypi_index_changed=lambda url: self._save_state_key("pypi_index", url),
+            on_suffix_changed=lambda: self._dist_view.refresh_preview(),
+        )
         self._settings_view.pack(fill="both", expand=True)
 
         # -- 构建按钮移入构建页（右栏底部）——app 侧只持有引用管理状态 --
@@ -113,8 +119,7 @@ class App(ctk.CTk):
         self._build_status = self._dist_view.get_build_status()
 
         # -- restore global settings --
-        self._settings_view.set_pypi_index(
-            self._read_state().get("pypi_index", ""))
+        self._settings_view.set_pypi_index(self._read_state().get("pypi_index", ""))
 
         # -- auto-load last plugin dir --
         self._auto_open_last_plugin_dir()
@@ -147,34 +152,37 @@ class App(ctk.CTk):
             """Helper to build a uniform directory selector row.
             Returns (frame, lbl, [buttons...]).
             """
-            ctk.CTkLabel(card, text=label,
-                         font=ctk.CTkFont(weight="bold")).grid(
-                row=row, column=0, padx=(10, 5), pady=6, sticky="w")
-            frame = ctk.CTkFrame(card, fg_color=BG2,
-                                 border_width=0, corner_radius=6)
+            ctk.CTkLabel(card, text=label, font=ctk.CTkFont(weight="bold")).grid(
+                row=row, column=0, padx=(10, 5), pady=6, sticky="w"
+            )
+            frame = ctk.CTkFrame(card, fg_color=BG2, border_width=0, corner_radius=6)
             frame.grid(row=row, column=1, sticky="ew", padx=5, pady=6)
             frame.grid_columnconfigure(0, weight=1)
-            lbl = ctk.CTkLabel(frame, text=text, fg_color="transparent",
-                               anchor="w")
+            lbl = ctk.CTkLabel(frame, text=text, fg_color="transparent", anchor="w")
             lbl.pack(fill="x", expand=True, padx=8, pady=4)
 
             btn_frame = ctk.CTkFrame(card, fg_color="transparent")
             btn_frame.grid(row=row, column=2, padx=5, pady=6, sticky="w")
-            btn = ctk.CTkButton(btn_frame, text="选择目录", width=BTN_W,
-                                command=select_cmd)
+            btn = ctk.CTkButton(
+                btn_frame, text="选择目录", width=BTN_W, command=select_cmd
+            )
             btn.pack(side="left")
             btns = [btn]
             # Fixed-width slot reserves reset button space so the
             # select button column never shifts when reset toggles
-            slot = ctk.CTkFrame(btn_frame, fg_color="transparent",
-                                width=33, height=28)
+            slot = ctk.CTkFrame(btn_frame, fg_color="transparent", width=33, height=28)
             slot.pack(side="left")
             slot.pack_propagate(False)
             if reset_cmd:
-                reset_btn = ctk.CTkButton(slot, text="↺", width=28,
-                        command=reset_cmd, fg_color="transparent",
-                        hover_color=("gray70", "gray40"),
-                        font=ctk.CTkFont(size=16))
+                reset_btn = ctk.CTkButton(
+                    slot,
+                    text="↺",
+                    width=28,
+                    command=reset_cmd,
+                    fg_color="transparent",
+                    hover_color=("gray70", "gray40"),
+                    font=ctk.CTkFont(size=16),
+                )
                 # Hidden by default; shown only when dir is manually set
                 ToolTip(reset_btn, "恢复默认")
                 btns.append(reset_btn)
@@ -182,14 +190,20 @@ class App(ctk.CTk):
 
         # Row 0: 插件目录（始终可用）
         self._dir_path_frame, self._dir_label, self._dir_btns = _make_dir_row(
-            card, 0, "插件目录:", "未选择", self._select_shared_dir)
+            card, 0, "插件目录:", "未选择", self._select_shared_dir
+        )
 
         # Row 1: 输出目录（初始禁用；源码/收集目录已移入构建 tab 各系统视图）
         self._out_path_frame, self._out_label, self._out_btns = _make_dir_row(
-            card, 1, "输出目录:", "", self._select_output_dir,
-            reset_cmd=self._reset_output_dir)
+            card,
+            1,
+            "输出目录:",
+            "",
+            self._select_output_dir,
+            reset_cmd=self._reset_output_dir,
+        )
         self._out_reset_btn = self._out_btns[1]
-        
+
         # Initially disable output row
         for b in self._out_btns:
             b.configure(state="disabled")
@@ -282,8 +296,10 @@ class App(ctk.CTk):
         self._out_path_frame.configure(border_width=0, border_color="")
         # 输出目录：自动默认时保持灰字，手动设置时用正常深色
         self._out_label.configure(
-            text_color=("gray60", "gray60") if self._output_auto
-            else ("gray10", "gray90"))
+            text_color=(
+                ("gray60", "gray60") if self._output_auto else ("gray10", "gray90")
+            )
+        )
         # 视图内目录行红框复位
         self._dist_view.clear_errors()
 
@@ -291,9 +307,11 @@ class App(ctk.CTk):
         self._info_view.reset_field_borders()
         # Reset tab colors
         self._tab_view._segmented_button._buttons_dict["信息"].configure(
-            text_color=("gray10", "gray90"))
+            text_color=("gray10", "gray90")
+        )
         self._tab_view._segmented_button._buttons_dict["构建"].configure(
-            text_color=("gray10", "gray90"))
+            text_color=("gray10", "gray90")
+        )
         # 清空错误登记表
         self._error_fields = {"信息": set(), "构建": set()}
 
@@ -351,8 +369,7 @@ class App(ctk.CTk):
         """Validate 信息 tab fields，一次性检测所有必填项。Returns True if valid."""
         manifest = self._info_view._build_manifest()
         ok = True
-        for key, label in (("id", "id"), ("name", "name"),
-                           ("version", "version")):
+        for key, label in (("id", "id"), ("name", "name"), ("version", "version")):
             if not manifest.get(key, ""):
                 self._logger.error(f"信息 → {label} 不能为空")
                 self._highlight_tab("信息")
@@ -376,14 +393,15 @@ class App(ctk.CTk):
             # 入口缺失不豁免 → 进入条目级高亮
             ctx.builder.resolve(
                 ctx.source_dir,
-                entry_exempt=bool(ctx.compile_cfg.get("command")
-                                  or ctx.compile_cfg.get("manifest")))
+                entry_exempt=bool(
+                    ctx.compile_cfg.get("command") or ctx.compile_cfg.get("manifest")
+                ),
+            )
         except BuildError as exc:
             errors += exc.errors
         if errors:
             # 条目级错误 → 对应行红框红字
-            rels = {msg.split("不存在: ", 1)[1]
-                    for msg in errors if "不存在: " in msg}
+            rels = {msg.split("不存在: ", 1)[1] for msg in errors if "不存在: " in msg}
             # 「入口必须是单个文件」→ 定位到该入口条目行
             if any("入口必须是单个文件" in m for m in errors):
                 it = ctx.builder.entry_item()
@@ -397,8 +415,9 @@ class App(ctk.CTk):
             if rels:
                 self._dist_view.mark_errors(rels)
             # 区域级错误（如打包内容为空 / 缺少入口）→ 容器红框 + 提示
-            area_msg = next((m for m in errors
-                             if "入口" in m and "不存在: " not in m), "")
+            area_msg = next(
+                (m for m in errors if "入口" in m and "不存在: " not in m), ""
+            )
             if area_msg:
                 self._dist_view.mark_errors(rels, area_msg)
             for msg in errors:
@@ -421,11 +440,13 @@ class App(ctk.CTk):
         return BuildContext(
             plugin_dir=plugin_dir,
             source_dir=Path(self._plugin_dir or "."),
-            output_dir=Path(self._output_dir) if self._output_dir else plugin_dir / "output",
+            output_dir=(
+                Path(self._output_dir) if self._output_dir else plugin_dir / "output"
+            ),
             plugin_name=plugin_dir.name,
             compile_system=compile_view.get_compile_system(),
-            builder=self._dist_view.get_builder() or Builder(
-                ProjectManager(str(plugin_dir))),
+            builder=self._dist_view.get_builder()
+            or Builder(ProjectManager(str(plugin_dir))),
             log=self._logger,
             pm=self._pm,
             pypi_index=self._settings_view.get_pypi_index(),
@@ -460,7 +481,8 @@ class App(ctk.CTk):
             return
         if self._debug_view.is_running():
             self._build_status.configure(
-                text="调试运行中，请先停止调试", text_color="red")
+                text="调试运行中，请先停止调试", text_color="red"
+            )
             self._logger.error("调试运行中，请先停止调试")
             return
         if not self._plugin_dir:
@@ -471,8 +493,7 @@ class App(ctk.CTk):
             return
 
         self._clear_error_styles()
-        self._logger.separator(
-            f"构建 {datetime.datetime.now().strftime('%H:%M:%S')}")
+        self._logger.separator(f"构建 {datetime.datetime.now().strftime('%H:%M:%S')}")
         self._build_success = False
         self._build_status.configure(text="构建中...", text_color=("gray40", "gray60"))
         self._running = True
@@ -489,6 +510,7 @@ class App(ctk.CTk):
     def _begin_build(self) -> None:
         """主线程：校验 → 收集配置 → 启动构建线程。"""
         import gui.ui_dispatch as ui_dispatch
+
         self._logger.info("开始校验")
         info_ok = self._validate_info_tab()
         dist_ok = self._validate_dist_tab()
@@ -503,8 +525,9 @@ class App(ctk.CTk):
         self._logger.detail("配置已保存")
         ctx = self._make_build_context()
         manifest_data = self._info_view._build_manifest()
-        threading.Thread(target=self._run_build,
-                         args=(ctx, manifest_data), daemon=True).start()
+        threading.Thread(
+            target=self._run_build, args=(ctx, manifest_data), daemon=True
+        ).start()
 
     def _on_debug_state_changed(self) -> None:
         """调试运行状态变化：运行中禁用构建按钮（互斥，同一时间只跑一个子进程）。"""
@@ -519,16 +542,18 @@ class App(ctk.CTk):
         if not self._running:
             return
         if not messagebox.askyesno(
-                "取消构建",
-                "确定取消当前构建？\n正在运行的命令（compile / 依赖安装 / "
-                "打包）将被立即终止。"):
+            "取消构建",
+            "确定取消当前构建？\n正在运行的命令（compile / 依赖安装 / "
+            "打包）将被立即终止。",
+        ):
             return
         if not self._running or self._canceller is None:
             return  # 对话框期间构建可能已结束
         self._canceller.cancel()
         self._logger.warning("正在取消构建...")
-        self._build_status.configure(text="正在取消...",
-                                     text_color=("gray50", "gray60"))
+        self._build_status.configure(
+            text="正在取消...", text_color=("gray50", "gray60")
+        )
 
     def _on_close(self) -> None:
         """窗口关闭：若构建进行中，先终止子进程再退出（不弹框）。"""
@@ -545,18 +570,18 @@ class App(ctk.CTk):
 
         dev / 无版本构建（本地源码运行）跳过检查。
         """
-        from backend.updater import (get_current_version, check_latest,
-                                     should_notify)
+        from backend.updater import get_current_version, check_latest, should_notify
+
         version = get_current_version()
         if version in ("dev", "No Version"):
             return
 
         def _check() -> None:
             import gui.ui_dispatch as ui_dispatch
+
             latest, url, size = check_latest()
             if latest and url and should_notify(latest, version):
-                ui_dispatch.ui(lambda: self._on_new_version_found(
-                    latest, url, size))
+                ui_dispatch.ui(lambda: self._on_new_version_found(latest, url, size))
 
         threading.Thread(target=_check, daemon=True).start()
 
@@ -571,12 +596,14 @@ class App(ctk.CTk):
             self._settings_view.show_update(latest, url, size)
             # 未下载过 → 弹窗点「下载」后自动开始下载
             from backend.updater import update_dest
+
             if not update_dest(latest).is_file():
                 self._settings_view.start_download()
 
     def _ask_new_version(self, latest: str, url: str, size: int) -> bool:
         """自定义更新询问对话框。返回 True = 用户选择下载/安装。"""
         from backend.updater import skip_version, update_dest
+
         dest = update_dest(latest)
         has_installer = dest.is_file()
 
@@ -586,12 +613,14 @@ class App(ctk.CTk):
         dialog.transient(self)
         dialog.grab_set()
 
-        text = (f"发现 DGHub SDK Packer {latest}，安装包已下载，是否安装？"
-                if has_installer
-                else f"发现 DGHub SDK Packer {latest}，是否下载？")
-        ctk.CTkLabel(dialog, text=text, font=ctk.CTkFont(size=14),
-                     wraplength=380, justify="left").pack(
-            padx=24, pady=(24, 10))
+        text = (
+            f"发现 DGHub SDK Packer {latest}，安装包已下载，是否安装？"
+            if has_installer
+            else f"发现 DGHub SDK Packer {latest}，是否下载？"
+        )
+        ctk.CTkLabel(
+            dialog, text=text, font=ctk.CTkFont(size=14), wraplength=380, justify="left"
+        ).pack(padx=24, pady=(24, 10))
 
         result = {"ok": False}
 
@@ -610,12 +639,15 @@ class App(ctk.CTk):
         btns = ctk.CTkFrame(dialog, fg_color="transparent")
         btns.pack()
         # 右对齐：side=right 从右向左排，pack 顺序与显示顺序相反；padx=5 统一间距
-        ctk.CTkButton(btns, text="取消", width=100,
-                      command=_on_cancel).pack(side="right", padx=5)
-        ctk.CTkButton(btns, text="安装" if has_installer else "下载",
-                      width=100, command=_on_ok).pack(side="right", padx=5)
-        ctk.CTkButton(btns, text="忽略此版本", width=100,
-                      command=_on_ignore).pack(side="right", padx=5)
+        ctk.CTkButton(btns, text="取消", width=100, command=_on_cancel).pack(
+            side="right", padx=5
+        )
+        ctk.CTkButton(
+            btns, text="安装" if has_installer else "下载", width=100, command=_on_ok
+        ).pack(side="right", padx=5)
+        ctk.CTkButton(btns, text="忽略此版本", width=100, command=_on_ignore).pack(
+            side="right", padx=5
+        )
 
         # 居中于主窗口
         dialog.update_idletasks()
@@ -625,14 +657,14 @@ class App(ctk.CTk):
         dialog.wait_window()
         return result["ok"]
 
-    def _run_build(self, ctx: BuildContext,
-                   manifest_data: dict[str, Any]) -> None:
+    def _run_build(self, ctx: BuildContext, manifest_data: dict[str, Any]) -> None:
         """构建管线（后台线程；UI 更新经 ui_dispatch 回主线程）。
 
         校验与配置收集已由主线程完成（_begin_build）——本线程只跑
         后端 run_build（日志经线程安全 LogTab，UI 状态经调度）。
         """
         import gui.ui_dispatch as ui_dispatch
+
         self._build_success = True
         try:
             ctx.output_dir.mkdir(parents=True, exist_ok=True)
@@ -651,8 +683,7 @@ class App(ctk.CTk):
             self._logger.error(f"构建失败: {exc}")
             self._build_success = False
         finally:
-            if (self._canceller is not None
-                    and self._canceller.cancelled):
+            if self._canceller is not None and self._canceller.cancelled:
                 # 取消后清理已产生的中间产物（仅 output_dir，不动用户源目录）
                 cleanup_intermediates(ctx.output_dir, ctx.plugin_name)
                 self._logger.warning("构建已取消")
@@ -661,14 +692,15 @@ class App(ctk.CTk):
     def _finish_build_ui(self) -> None:
         """主线程：构建结束恢复按钮/状态/解锁（校验失败路径同样调用）。"""
         self._running = False
-        self._build_btn.configure(text="开始构建", state="normal",
-                                  command=self._start_build)
+        self._build_btn.configure(
+            text="开始构建", state="normal", command=self._start_build
+        )
         self._lock_controls(False)
-        cancelled = (self._canceller is not None
-                     and self._canceller.cancelled)
+        cancelled = self._canceller is not None and self._canceller.cancelled
         if cancelled:
-            self._build_status.configure(text="⏹ 已取消",
-                                         text_color=("gray50", "gray60"))
+            self._build_status.configure(
+                text="⏹ 已取消", text_color=("gray50", "gray60")
+            )
         elif self._build_success:
             self._build_status.configure(text="✅ 构建成功", text_color="green")
         else:
@@ -714,7 +746,6 @@ class App(ctk.CTk):
 
         # Source dir（顶层 source_dir；未设置回退插件目录）
 
-
         # Enable output dir row
         for b in self._out_btns:
             b.configure(state="normal")
@@ -723,8 +754,9 @@ class App(ctk.CTk):
         saved_out = project.get("builder", {}).get("output_dir", "")
         if saved_out:
             self._output_dir = self._pm.to_absolute(saved_out)
-            self._out_label.configure(text=_norm_dir(self._output_dir),
-                                      text_color=("gray10", "gray90"))
+            self._out_label.configure(
+                text=_norm_dir(self._output_dir), text_color=("gray10", "gray90")
+            )
             self._output_auto = False
         else:
             default_out = _norm_dir(Path(d) / "output")
@@ -739,4 +771,3 @@ class App(ctk.CTk):
         # 加载后同步编译产物条目（幂等只填空：正常项目无变化；
         # 新项目/旧版升级缺 deduce 条目时自动补全，替代原「从编译填充」）
         self._on_compile_changed()
-    
