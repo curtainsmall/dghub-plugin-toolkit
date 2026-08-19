@@ -9,7 +9,7 @@ import customtkinter as ctk
 
 from backend.manifest_validator import VALID_FIELD_TYPES, validate_manifest
 from backend.project_manager import ProjectManager
-from gui.widgets import (BG0, BG1, STRIP_A, STRIP_B, FillScrollable,
+from gui.widgets import (BG0, BG1, LIST_BG, STRIP_A, STRIP_B, FillScrollable,
                          center_dialog, reset_entry_border)
 
 FIELD_TYPE_LABELS: dict[str, str] = {
@@ -118,23 +118,27 @@ class ManifestTab(ctk.CTkFrame):
         main_card.pack(fill="both", expand=True, padx=8, pady=8)
         main_card.grid_columnconfigure(0, weight=1)              # left 弹性
         main_card.grid_columnconfigure(1, weight=0, minsize=360)  # right 固定宽
-        main_card.grid_rowconfigure(0, weight=1)
+        main_card.grid_rowconfigure(0, weight=0)   # 上行：基本信息 | 能力声明
+        main_card.grid_rowconfigure(1, weight=1)   # 下行：Config Schema 编辑器
 
-        left = ctk.CTkFrame(main_card, fg_color="transparent")
-        left.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
+        # 上行左：基本信息
+        left_top = ctk.CTkFrame(main_card, fg_color="transparent")
+        left_top.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
 
-        right = ctk.CTkFrame(main_card, fg_color="transparent")
-        right.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
-        right.grid_rowconfigure(0, weight=1)
-        right.grid_columnconfigure(0, weight=1)
+        # 上行右：能力声明（与基本信息同行）
+        right_top = ctk.CTkFrame(main_card, fg_color="transparent")
+        right_top.grid(row=0, column=1, sticky="nsew", padx=(5, 10),
+                       pady=(10, 0))
 
-        # -- left side: form --
-        self._build_basic_info(left)
-        self._build_capabilities(left)
-        self._build_schema_editor(left)
+        # 下行：Config Schema 编辑器（横跨全宽；内部三列含字段详情）
+        left_bottom = ctk.CTkFrame(main_card, fg_color="transparent")
+        left_bottom.grid(row=1, column=0, columnspan=2, sticky="nsew",
+                         padx=(10, 10), pady=(10, 10))
 
-        # -- right side: field detail (editable) --
-        self._build_field_detail(right)
+        # -- 布局：基本信息 + 能力声明在上行，schema（含字段详情）在下行 --
+        self._build_basic_info(left_top)
+        self._build_capabilities(right_top)
+        self._build_schema_editor(left_bottom)
 
     # ------------------------------------------------------------------
     # basic info
@@ -224,11 +228,13 @@ class ManifestTab(ctk.CTkFrame):
         ctk.CTkLabel(frame, text="Config Schema 编辑器",
                      font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
 
-        # sections area（卡片内直接呈现，条目斑马条纹）
+        # sections area（卡片内直接呈现，条目斑马条纹）；
+        # 第三列为字段详情（属 schema 编辑器一部分，标题下方同一行）
         sec_frame = ctk.CTkFrame(frame, fg_color="transparent")
         sec_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         sec_frame.grid_columnconfigure(0, weight=1)
         sec_frame.grid_columnconfigure(1, weight=1)
+        sec_frame.grid_columnconfigure(2, weight=0, minsize=360)
         sec_frame.grid_rowconfigure(0, weight=1)
 
         # left: section list（同卡片）
@@ -240,7 +246,7 @@ class ManifestTab(ctk.CTkFrame):
         ctk.CTkLabel(sec_left, text="分组列表",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
         self._section_container = ctk.CTkScrollableFrame(
-            sec_left, fg_color="transparent")
+            sec_left, fg_color=LIST_BG)
         self._section_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
         self._section_container.grid_columnconfigure(0, weight=1)
 
@@ -262,7 +268,7 @@ class ManifestTab(ctk.CTkFrame):
         ctk.CTkLabel(sec_right, text="字段列表",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, pady=(5, 5))
         self._field_container = ctk.CTkScrollableFrame(
-            sec_right, fg_color="transparent")
+            sec_right, fg_color=LIST_BG)
         self._field_container.grid(row=1, column=0, sticky="nsew", padx=2, pady=5)
         self._field_container.grid_columnconfigure(0, weight=1)
 
@@ -280,6 +286,12 @@ class ManifestTab(ctk.CTkFrame):
                       command=self._delete_field).pack(side="left", padx=2)
         for btn in fld_btn_frame.winfo_children():
             self._controls.append(btn)
+
+        # 第三列：字段详情（Config Schema 编辑器的一部分，
+        # 标题下方同一行——编辑左侧字段列表选中字段）
+        sec_detail = ctk.CTkFrame(sec_frame, fg_color="transparent")
+        sec_detail.grid(row=0, column=2, sticky="nsew", padx=(10, 0))
+        self._build_field_detail(sec_detail)
 
     # ------------------------------------------------------------------
     # section management
@@ -645,7 +657,7 @@ class ManifestTab(ctk.CTkFrame):
                       command=self._add_option_detail).pack(side="right")
         self._options_container = ctk.CTkScrollableFrame(
             self._detail_options_row,
-            fg_color="transparent", corner_radius=6,
+            fg_color=LIST_BG, corner_radius=6,
             height=140)
         self._options_container.grid(row=1, column=0, sticky="ew",
                                      padx=(95, 0))

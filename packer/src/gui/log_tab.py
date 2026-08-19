@@ -13,7 +13,7 @@ import customtkinter as ctk
 
 from backend import settings_store
 from gui.ui_dispatch import ui
-from gui.widgets import BG1
+from gui.widgets import BG1, LIST_BG
 
 # 仅这三种级别着色；颜色取在浅色/深色文本框背景下均可读的中间色调
 # （tkinter tag 只接受单色，无法用 CTk 的 (light, dark) 二元组）。
@@ -30,12 +30,12 @@ class _LogPane(ctk.CTkFrame):
     """单个日志子视图：只读文本 + 级别着色。"""
 
     def __init__(self, master: Any, **kwargs: Any) -> None:
-        super().__init__(master, fg_color="transparent", **kwargs)
+        super().__init__(master, fg_color=LIST_BG, corner_radius=6, **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self._text = ctk.CTkTextbox(
             self, wrap="word", font=("Consolas", 11), state="disabled",
-            fg_color="transparent")
+            fg_color=LIST_BG)
         self._text.grid(row=0, column=0, sticky="nsew")
         for level, color in _LEVEL_COLORS.items():
             self._text.tag_config(level, foreground=color)
