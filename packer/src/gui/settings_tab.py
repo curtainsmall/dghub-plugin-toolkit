@@ -12,7 +12,7 @@ from backend import settings_store
 from backend.updater import (DownloadCancelled, check_latest,
                              cleanup_stale_installers, download_installer,
                              get_current_version, is_newer, update_dest)
-from gui.widgets import BG0, BG1
+from gui.widgets import BG0, BG1, FillScrollable
 
 try:
     from backend._version import __version__ as APP_VERSION  # type: ignore[reportMissingImports]
@@ -142,26 +142,28 @@ class SettingsTab(ctk.CTkFrame):
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        # 内容过长：整体放入滚动容器
-        self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        # 内容过长：整体放入滚动容器（与其他 tab 同款 FillScrollable，
+        # 消除 CTkScrollableFrame 内容窗口的额外偏移）
+        self._scroll = FillScrollable(self)
         self._scroll.pack(fill="both", expand=True)
-        self._scroll.grid_columnconfigure(0, weight=1)
+        self._scroll.content.grid_columnconfigure(0, weight=1)
         # 第一层浮动卡片（BG1）：tab 全部内容一个 frame，浮在全局背景上
-        card = ctk.CTkFrame(self._scroll, fg_color=BG1, corner_radius=8)
+        card = ctk.CTkFrame(self._scroll.content, fg_color=BG1,
+                            corner_radius=8)
         card.pack(fill="both", expand=True, padx=8, pady=8)
         card.grid_columnconfigure(0, weight=1)
 
         row = 0
 
-        # -- App Info --
+        # -- App Info（首区块顶部与信息页一致：标题自带 10px）--
         info_frame = ctk.CTkFrame(card, fg_color="transparent")
         info_frame.grid(row=row, column=0, sticky="ew",
-                        padx=10, pady=(2, 5))
+                        padx=10, pady=(0, 5))
         info_frame.grid_columnconfigure(1, weight=1)
         row += 1
 
         ctk.CTkLabel(info_frame, text="应用信息",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+                     font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
 
         labels = [
@@ -190,7 +192,7 @@ class SettingsTab(ctk.CTkFrame):
         row += 1
 
         ctk.CTkLabel(theme_frame, text="主题设置",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+                     font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
 
         ctk.CTkLabel(theme_frame, text="外观模式:").grid(
@@ -208,7 +210,7 @@ class SettingsTab(ctk.CTkFrame):
         row += 1
 
         ctk.CTkLabel(build_frame, text="构建设置",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+                     font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
 
         ctk.CTkLabel(build_frame, text="PyPI 镜像源:").grid(
@@ -266,7 +268,7 @@ class SettingsTab(ctk.CTkFrame):
         row += 1
 
         ctk.CTkLabel(runtime_frame, text="调试设置",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+                     font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
 
         ctk.CTkLabel(runtime_frame, text="主机（DGHUB_HOST）:").grid(
@@ -313,7 +315,7 @@ class SettingsTab(ctk.CTkFrame):
         row += 1
 
         ctk.CTkLabel(license_frame, text="开源协议",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+                     font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=10, pady=(10, 2))
         ctk.CTkLabel(
             license_frame,
@@ -329,7 +331,7 @@ class SettingsTab(ctk.CTkFrame):
         row += 1
 
         ctk.CTkLabel(link_frame, text="相关链接",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+                     font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
 
         ctk.CTkButton(link_frame, text="🌐 GitHub 仓库",
