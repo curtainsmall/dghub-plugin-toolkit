@@ -21,7 +21,8 @@ from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
 from gui.compile_tab import CompileTab
 from gui.widgets import (BG0, BG1, LIST_BG, STRIP_A, STRIP_B,
-                         FillScrollable, center_dialog, reset_entry_border)
+                         FillScrollable, ToolTip, center_dialog,
+                         reset_entry_border)
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -194,29 +195,37 @@ class BuildTab(ctk.CTkFrame):
         right = ctk.CTkFrame(main_card, fg_color="transparent")
         right.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
         right.grid_columnconfigure(0, weight=1)
-        right.grid_rowconfigure(2, weight=1)  # 弹性空间给预览树
+        right.grid_rowconfigure(1, weight=1)  # 弹性空间给预览树
 
-        # 输出文件预览
-        ctk.CTkLabel(right, text="输出文件预览",
-                     font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=0, column=0, sticky="nw", padx=10, pady=(10, 5))
-        # 打包信息区（树外：包名/大小 + manifest 快照）
-        self._pack_info = ctk.CTkTextbox(
-            right, height=72, font=("Consolas", 11),
-            state="disabled", fg_color=LIST_BG)
-        self._pack_info.grid(row=1, column=0, sticky="ew", padx=10,
-                             pady=(0, 6))
-        # 产物树（根 = 输出目录，可折叠）
+        # 输出文件预览（标题右侧 ⓘ 悬停解释颜色图例）
+        preview_title = ctk.CTkFrame(right, fg_color="transparent")
+        preview_title.grid(row=0, column=0, sticky="nw", padx=10,
+                           pady=(10, 5))
+        ctk.CTkLabel(preview_title, text="输出文件预览",
+                     font=ctk.CTkFont(size=14, weight="bold")).pack(
+            side="left")
+        legend_icon = ctk.CTkLabel(
+            preview_title, text="ⓘ",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("gray45", "gray65"))
+        legend_icon.pack(side="left", padx=(6, 0))
+        ToolTip(legend_icon, rich=[
+            ("入口文件（含所在目录）\n", "#4CAF50"),
+            ("manifest.json（清单）\n", "#F5C518"),
+            ("编译产物\n", "#888888"),
+            ("缺失条目", "#E5484D"),
+        ])
+        # 产物树（根 = 包名，可折叠）
         self._preview = ttk.Treeview(right, show="tree", selectmode="none",
                                      style="Preview.Treeview")
-        self._preview.grid(row=2, column=0, sticky="nsew", padx=10,
+        self._preview.grid(row=1, column=0, sticky="nsew", padx=10,
                            pady=(0, 10))
         self._controls.append(self._preview)
         self._style_preview_tree()
 
         # 构建按钮行（右栏底部）：开始构建 + 状态
         build_row = ctk.CTkFrame(right, fg_color="transparent")
-        build_row.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 12))
+        build_row.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 12))
         build_row.grid_columnconfigure(0, weight=1)
         self._build_status = ctk.CTkLabel(build_row, text="",
                                           font=ctk.CTkFont(size=12),
@@ -899,35 +908,12 @@ class BuildTab(ctk.CTkFrame):
 
     def _render_preview(self, items: list[PreviewItem],
                         packer_name: str) -> None:
-        """渲染产物模型 → 打包信息区 + 产物树。"""
+        """渲染产物模型 → 产物树（根 = 包名，子 = zip 内文件）。"""
         files = [it for it in items if it.kind == "file"]
         missing = [it for it in items if it.kind == "missing"]
         dirs = [it for it in items if it.kind == "dir"]
-        total = sum(p.source.stat().st_size for p in files
-                    if p.source is not None and p.source.is_file())
-        size_txt = (f"{total / 1048576:.1f} MB" if total >= 1048576
-                    else f"{total / 1024:.1f} KB")
 
-        # ---- 打包信息（树外：包名/大小 + manifest 快照）----
-        info_lines = [f"📦 {packer_name}.zip（{len(files)} 个文件, {size_txt}）"]
-        if self._pm:
-            mf = self._pm.read_manifest() or {}
-            schema = mf.get("config_schema", {}) or {}
-            n_sec = len(schema.get("sections", [])) if isinstance(schema, dict) else 0
-            n_fld = sum(len(s.get("fields", [])) for s in
-                        (schema.get("sections", []) if isinstance(schema, dict) else []))
-            info_lines.append(
-                f"id: {mf.get('id', '?')}  |  {mf.get('name', '?')}  |  "
-                f"v{mf.get('version', '?')}  |  entry: {mf.get('entry', '?')}")
-            if n_sec:
-                info_lines.append(
-                    f"config_schema: {n_sec} 个分组 / {n_fld} 个字段")
-        self._pack_info.configure(state="normal")
-        self._pack_info.delete("1.0", "end")
-        self._pack_info.insert("1.0", "\n".join(info_lines))
-        self._pack_info.configure(state="disabled")
-
-        # ---- 产物树（根 = 包名，子 = zip 内文件；输出目录全局可见）----
+        # ---- 产物树（根 = 包名，子 = zip 内文件）----
         root = self._preview_ins("", f"📁 {packer_name}/")
         self._preview_arcs(files, root)
         tree_dirs = {it.arc.split("/")[0] for it in files}

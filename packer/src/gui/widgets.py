@@ -249,19 +249,27 @@ class FillScrollable(ctk.CTkFrame):
 
 
 class ToolTip:
-    """悬停提示：为控件绑定进入/离开事件，显示轻量气泡。"""
+    """悬停提示：为控件绑定进入/离开事件，显示轻量气泡。
 
-    def __init__(self, widget: Any, text: str) -> None:
+    ``text`` 纯文本模式（单色白字）；``rich`` 分段着色模式
+    （``[(文本, 前景色), ...]``，段内可含换行，适合图例类提示）。
+    """
+
+    def __init__(self, widget: Any, text: str = "",
+                 rich: list[tuple[str, str]] | None = None) -> None:
         self._widget = widget
         self._text = text
+        self._rich = rich
         self._tip: Any | None = None
         self._label: Any | None = None
         widget.bind("<Enter>", self._show)
         widget.bind("<Leave>", self._hide)
 
     def set_text(self, text: str) -> None:
-        """更新提示文本；气泡正在显示时即时刷新。"""
+        """更新提示文本；气泡正在显示时即时刷新（rich 模式不支持）。"""
         self._text = text
+        if self._rich is not None:
+            return
         if self._tip is not None and self._label is not None:
             self._label.configure(text=text)
 
@@ -274,10 +282,23 @@ class ToolTip:
         self._tip = tk.Toplevel(self._widget)
         self._tip.wm_overrideredirect(True)
         self._tip.wm_geometry(f"+{x}+{y}")
-        self._label = tk.Label(self._tip, text=self._text, background="#333333",
-                               foreground="white", padx=6, pady=2,
-                               justify="left")
-        self._label.pack()
+        if self._rich is not None:
+            # 每行一个 Label 垂直排列：请求尺寸贴合内容（tk.Text 固定
+            # 80x24 请求尺寸会把气泡撑大）
+            self._label = tk.Frame(self._tip, background="#333333")
+            self._label.pack()
+            for seg, color in self._rich:
+                tk.Label(self._label, text=seg.rstrip("\n"),
+                         background="#333333",
+                         foreground=color or "white",
+                         font=("TkDefaultFont", 9),
+                         padx=5, pady=2, justify="left",
+                         anchor="w").pack(fill="x")
+        else:
+            self._label = tk.Label(self._tip, text=self._text,
+                                   background="#333333", foreground="white",
+                                   padx=6, pady=2, justify="left")
+            self._label.pack()
 
     def _hide(self, _event: Any = None) -> None:
         if self._tip is not None:
