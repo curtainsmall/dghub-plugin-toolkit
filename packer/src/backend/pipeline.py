@@ -88,12 +88,12 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
     existing_entry = ctx.builder.entry_item()  # 视图（旧 deduced + 手动）
     if deduced_entries and (
             existing_entry is None
-            or existing_entry.path != deduced_entries[0].path):
+            or existing_entry.value != deduced_entries[0].value):
         demoted = ctx.builder.strip_tag("entry")
         if demoted:
             applied.append(f"入口让位: {demoted} 个旧入口条目降级为普通内容")
     elif deduced_entries and existing_entry is not None \
-            and existing_entry.path == deduced_entries[0].path \
+            and existing_entry.value == deduced_entries[0].value \
             and not existing_entry.derived:
         # 同名且为手动条目：手动入口已承担，deduced 的 entry 条目跳过
         deduced = [it for it in deduced if "entry" not in it.tags]
@@ -101,12 +101,11 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
 
     # 反馈消息：仅报告相对旧视图的变化（新增 / 清除）
     def _key(it: BuilderItem) -> tuple[str, str]:
-        return (("path", it.path) if it.path is not None
-                else ("dir", it.dir or ""))
+        return (it.kind.value, it.value)
     old_keys = {_key(it) for it in old_deduced}
     for it in deduced:
         if _key(it) not in old_keys:
-            rel = it.path if it.path is not None else it.dir
+            rel = it.value
             applied.append(f"添加打包内容: {rel}（入口）"
                            if "entry" in it.tags
                            else f"添加打包内容: {rel}（编译产物）")
@@ -130,12 +129,12 @@ def sync_derived(ctx: BuildContext) -> None:
     existing_entry = ctx.builder.entry_item()
     if deduced_entries and (
             existing_entry is None
-            or existing_entry.path != deduced_entries[0].path):
+            or existing_entry.value != deduced_entries[0].value):
         demoted = ctx.builder.strip_tag("entry")
         if demoted:
             ctx.log.detail(f"入口让位: {demoted} 个旧入口条目降级为普通内容")
     elif deduced_entries and existing_entry is not None \
-            and existing_entry.path == deduced_entries[0].path \
+            and existing_entry.value == deduced_entries[0].value \
             and not existing_entry.derived:
         # 同名且为手动条目：手动入口已承担，deduced 的 entry 条目跳过
         deduced = [it for it in deduced if "entry" not in it.tags]
@@ -190,8 +189,8 @@ def run_build(ctx: BuildContext, manifest_data: dict[str, Any]) -> Path | None:
 
     # manifest 的 entry = entry 标签条目的 arc（validate 已保证恰好一个）
     entry_item = ctx.builder.entry_item()
-    assert entry_item is not None and entry_item.path is not None
-    entry_arc = entry_item.path
+    assert entry_item is not None and entry_item.value is not None
+    entry_arc = entry_item.value
 
     # 入口产物兜底校验：entry 文件可能由编译阶段产出（不在 source_dir），
     # 收集完成后必须实际存在（产物树或打包内容之一提供）

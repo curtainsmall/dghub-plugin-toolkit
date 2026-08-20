@@ -8,12 +8,15 @@
 """
 
 from pathlib import Path
+from dataclasses import dataclass
 from tkinter import filedialog
+from tkinter import ttk
 from typing import Any, Callable
 
 import customtkinter as ctk
 
-from backend.builder import Builder, BuilderItem, evaluate_pattern
+from backend.builder import (BuildError, Builder, BuilderItem, ItemKind,
+                             evaluate_pattern)
 from backend.packaging import pack_suffix
 from backend.project_manager import ProjectManager
 from gui.compile_tab import CompileTab
@@ -23,9 +26,26 @@ from gui.widgets import (BG0, BG1, LIST_BG, STRIP_A, STRIP_B,
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
 
+
+@dataclass
+class PreviewItem:
+    """产物内容条目（来源无关：手动/编译产物/规则/声明）。
+
+    - ``kind="file"``：包内文件（``source`` 存在时为实际文件，
+      否则为编译产物声明——未构建）
+    - ``kind="dir"``：目录声明（编译产物目录，未展开）
+    - ``kind="missing"``：声明但缺失的条目
+    """
+
+    arc: str                       # 包内相对路径（posix）
+    kind: str = "file"             # "file" | "dir" | "missing"
+    source: Path | None = None     # 源文件（file 且实际存在时）
+    derived: bool = False          # 编译产物来源
+    entry: bool = False            # 入口
+
 # 条目类型徽章样式：(背景, 前景) 按浅/深模式，区分文件/目录/规则
 _KIND_STYLES = {
-    "path": (("#DCE7FB", "#2E4A7A"), "文件"),
+    "file": (("#DCE7FB", "#2E4A7A"), "文件"),
     "dir": (("#E9E2F8", "#4A3A6A"), "目录"),
     "pattern": (("#F8E8D8", "#6A4A2A"), "规则"),
 }
@@ -173,22 +193,29 @@ class BuildTab(ctk.CTkFrame):
         right = ctk.CTkFrame(main_card, fg_color="transparent")
         right.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
         right.grid_columnconfigure(0, weight=1)
-        right.grid_rowconfigure(1, weight=1)  # 弹性空间给预览 Textbox
+        right.grid_rowconfigure(2, weight=1)  # 弹性空间给预览树
 
         # 输出文件预览
         ctk.CTkLabel(right, text="输出文件预览",
                      font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, sticky="nw", padx=10, pady=(10, 5))
-        self._preview = ctk.CTkTextbox(right, wrap="word",
-                                       font=("Consolas", 12),
-                                       state="disabled", fg_color=LIST_BG)
-        self._preview.grid(row=1, column=0, sticky="nsew", padx=10,
+        # 打包信息区（树外：包名/大小 + manifest 快照）
+        self._pack_info = ctk.CTkTextbox(
+            right, height=72, font=("Consolas", 11),
+            state="disabled", fg_color=LIST_BG)
+        self._pack_info.grid(row=1, column=0, sticky="ew", padx=10,
+                             pady=(0, 6))
+        # 产物树（根 = 输出目录，可折叠）
+        self._preview = ttk.Treeview(right, show="tree", selectmode="none",
+                                     style="Preview.Treeview")
+        self._preview.grid(row=2, column=0, sticky="nsew", padx=10,
                            pady=(0, 10))
         self._controls.append(self._preview)
+        self._style_preview_tree()
 
         # 构建按钮行（右栏底部）：开始构建 + 状态
         build_row = ctk.CTkFrame(right, fg_color="transparent")
-        build_row.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 12))
+        build_row.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 12))
         build_row.grid_columnconfigure(0, weight=1)
         self._build_status = ctk.CTkLabel(build_row, text="",
                                           font=ctk.CTkFont(size=12),
@@ -363,9 +390,8 @@ class BuildTab(ctk.CTkFrame):
             return
         workdir = Path(self._plugin_dir or ".")
         for i, item in enumerate(b.items()):
-            kind = next((k for k in ("path", "dir", "pattern")
-                        if getattr(item, k, None) is not None), "pattern")
-            rel = getattr(item, kind, "")
+            kind = item.kind.value
+            rel = item.value
             tags = item.tags
             is_entry = "entry" in tags
 
@@ -527,12 +553,11 @@ class BuildTab(ctk.CTkFrame):
         except Exception:
             pass
 
-        kind = next((k for k in ("path", "dir", "pattern")
-                    if getattr(item, k, None) is not None), "pattern")
-        rel = getattr(item, kind, "")
+        kind = item.kind.value
+        rel = item.value
         tags = item.tags
         base = Path(self._plugin_dir or ".")
-        is_file = (kind == "path")
+        is_file = (kind == "file")
         pending: list[str | None] = [None]  # 重选后的相对路径
         result: list = []
 
@@ -723,55 +748,208 @@ class BuildTab(ctk.CTkFrame):
     def refresh_preview(self, output_dir: str = "") -> None:
         self._refresh_preview(output_dir)
 
+    def _style_preview_tree(self) -> None:
+        """Treeview 样式：按外观模式适配深/浅色（卡片内凹陷列表区）。"""
+        style = ttk.Style()
+        style.theme_use("clam")
+        dark = ctk.get_appearance_mode() == "Dark"
+        bg = LIST_BG[1] if dark else LIST_BG[0]
+        fg = "#D0D0D0" if dark else "#202020"
+        style.configure("Preview.Treeview",
+                        background=bg, fieldbackground=bg,
+                        foreground=fg, rowheight=22, borderwidth=0,
+                        bordercolor=bg, lightcolor=bg, darkcolor=bg)
+        style.map("Preview.Treeview",
+                  background=[("selected", "#2B6EA6")],
+                  foreground=[("selected", "#FFFFFF")])
+        self._preview.tag_configure("entry", foreground="#4CAF50")
+        self._preview.tag_configure(
+            "derived", foreground=("#888888" if dark else "#777777"))
+        self._preview.tag_configure("missing",
+                                    foreground="#E5484D", font=("", 0, "bold"))
+
+    def _preview_ins(self, parent: str, text: str,
+                     tag: str = "") -> str:
+        """Treeview 插入一行，返回节点 id。"""
+        return self._preview.insert(
+            parent, "end", text=text,
+            tags=(tag,) if tag else ())
+
+    def _preview_arcs(self, items: list[PreviewItem],
+                      parent: str) -> None:
+        """按路径分目录插入产物树（arc → 嵌套节点）。
+
+        叶子标注：入口绿色、编译产物灰。
+        """
+        root: dict[str, Any] = {}
+        by_arc: dict[str, PreviewItem] = {}
+        for it in items:
+            by_arc[it.arc] = it
+            node = root
+            for part in it.arc.split("/"):
+                node = node.setdefault(part, {})
+
+        def _ins(d: dict[str, Any], pid: str, prefix: str = "") -> None:
+            for key in sorted(d):
+                children = d[key]
+                path = f"{prefix}/{key}" if prefix else key
+                if children:
+                    nid = self._preview_ins(pid, key + "/")
+                    _ins(children, nid, path)
+                else:
+                    src = by_arc.get(path)
+                    if src is not None and src.entry:
+                        leaf_tag = "entry"
+                    elif src is not None and src.derived:
+                        leaf_tag = "derived"
+                    else:
+                        leaf_tag = ""
+                    self._preview_ins(pid, key, leaf_tag)
+
+        _ins(root, parent)
+
+    # ------------------------------------------------------------------
+    # 预览：收集（来源无关）→ 模型 → 渲染（解耦）
+    # ------------------------------------------------------------------
+
+    def _collect_preview_items(self, out_dir: str = "") -> list[PreviewItem]:
+        """从 Builder 条目收集产物内容（手动/derived/规则统一模型）。
+
+        无论条目来自何处，都产出 PreviewItem 列表——渲染器只消费
+        该模型，可扩展其他来源（zip 扫描等）而不改渲染。
+        """
+        items: list[PreviewItem] = []
+        b = self._builder()
+        if b is None or not self._plugin_dir:
+            return items
+        source = Path(self._plugin_dir)
+        prod = self._guess_prod_dir(out_dir)
+        for item in b.items():
+            rel = item.value
+            is_entry = "entry" in item.tags
+            if item.derived:
+                if prod is None:
+                    # 未构建/已打包：文件为声明、目录单行
+                    if item.kind is ItemKind.DIR:
+                        items.append(PreviewItem(rel, "dir", derived=True))
+                    else:
+                        items.append(PreviewItem(rel, "file",
+                                                 derived=True,
+                                                 entry=is_entry))
+                    continue
+                base = prod / rel
+                if base.is_file():
+                    items.append(PreviewItem(rel, "file", source=base,
+                                             derived=True, entry=is_entry))
+                elif base.is_dir():
+                    for f in sorted(base.rglob("*")):
+                        if f.is_file():
+                            items.append(PreviewItem(
+                                f"{rel}/{f.relative_to(base).as_posix()}",
+                                "file", source=f, derived=True))
+                else:
+                    items.append(PreviewItem(rel, "missing"))
+            elif item.kind is ItemKind.DIR:
+                base = source / rel
+                if base.is_dir():
+                    for f in sorted(base.rglob("*")):
+                        if f.is_file():
+                            items.append(PreviewItem(
+                                f"{rel}/{f.relative_to(base).as_posix()}",
+                                "file", source=f))
+                else:
+                    items.append(PreviewItem(rel, "missing"))
+            elif item.kind is ItemKind.PATTERN:
+                for matched in evaluate_pattern(source, rel):
+                    items.append(PreviewItem(matched, "file",
+                                             source=source / matched))
+            else:  # FILE
+                p = source / rel
+                if p.is_file():
+                    items.append(PreviewItem(rel, "file", source=p,
+                                             entry=is_entry))
+                else:
+                    items.append(PreviewItem(rel, "missing"))
+        return items
+
+    def _render_preview(self, items: list[PreviewItem],
+                        packer_name: str) -> None:
+        """渲染产物模型 → 打包信息区 + 产物树。"""
+        files = [it for it in items if it.kind == "file"]
+        missing = [it for it in items if it.kind == "missing"]
+        dirs = [it for it in items if it.kind == "dir"]
+        total = sum(p.source.stat().st_size for p in files
+                    if p.source is not None and p.source.is_file())
+        size_txt = (f"{total / 1048576:.1f} MB" if total >= 1048576
+                    else f"{total / 1024:.1f} KB")
+
+        # ---- 打包信息（树外：包名/大小 + manifest 快照）----
+        info_lines = [f"📦 {packer_name}.zip（{len(files)} 个文件, {size_txt}）"]
+        if self._pm:
+            mf = self._pm.read_manifest() or {}
+            schema = mf.get("config_schema", {}) or {}
+            n_sec = len(schema.get("sections", [])) if isinstance(schema, dict) else 0
+            n_fld = sum(len(s.get("fields", [])) for s in
+                        (schema.get("sections", []) if isinstance(schema, dict) else []))
+            info_lines.append(
+                f"id: {mf.get('id', '?')}  |  {mf.get('name', '?')}  |  "
+                f"v{mf.get('version', '?')}  |  entry: {mf.get('entry', '?')}")
+            if n_sec:
+                info_lines.append(
+                    f"config_schema: {n_sec} 个分组 / {n_fld} 个字段")
+        self._pack_info.configure(state="normal")
+        self._pack_info.delete("1.0", "end")
+        self._pack_info.insert("1.0", "\n".join(info_lines))
+        self._pack_info.configure(state="disabled")
+
+        # ---- 产物树（根 = 包名，子 = zip 内文件；输出目录全局可见）----
+        root = self._preview_ins("", f"📁 {packer_name}/")
+        self._preview_ins(root, "manifest.json")
+        self._preview_arcs(files, root)
+        tree_dirs = {it.arc.split("/")[0] for it in files}
+        for it in dirs:
+            if it.arc in tree_dirs:
+                continue  # 已在文件树中（如 src/ 由 src/main.py 建立）
+            self._preview_ins(root, f"{it.arc}/（编译产物）", "derived")
+        if missing:
+            self._preview_ins(root, f"缺失 {len(missing)} 个条目", "missing")
+            for it in sorted(missing, key=lambda x: x.arc):
+                self._preview_ins(root, f"✗ {it.arc}", "missing")
+        # 展开根节点（子节点可见）
+        self._preview.item(root, open=True)
+
     def _refresh_preview(self, out_dir: str = "") -> None:
         plugin_name = Path(self._plugin_dir).name if self._plugin_dir else "插件名"
-        lines: list[str] = []
-        lines.append("=" * 30)
-        # 输出目录始终显示绝对路径、独占一行、格式统一（尾部带 "/"，
-        # 与顶部栏 _norm_dir 目录风格一致）：显式传入的可能无尾部斜杠
-        # （to_absolute / askdirectory），统一补上——任何刷新入口
-        # （含点「不压缩」触发的无参刷新）显示一致，行内容不随入口变化
+        self._preview.delete(*self._preview.get_children())
+
+        # 输出目录（绝对路径、尾部 "/"，任何刷新入口显示一致）
         default_out = (Path(self._plugin_dir) / "output").as_posix() \
             if self._plugin_dir else "（未选择插件目录）"
         shown_out = (out_dir or default_out).rstrip("/") + "/"
-        lines.append(f"输出目录: {shown_out}")
 
-        entry = "未设置"
         b = self._builder()
         packer_name = (b.get_packer_name() if b else "") or plugin_name
-        # 与 resolve_packer_name 一致：auto_suffix 开启时按产物模式追加
         project = self._pm.read_project() if self._pm else {}
         compiler = project.get("compiler", {}) if isinstance(project, dict) else {}
         packer_name += pack_suffix(compiler)
-        lines.append(f"  {packer_name}.zip  ← 压缩包")
 
-        # 树行：先收集再绘制——最后一行用 L 形转角（└──），其余用 ├──
-        tree = ["    ├── manifest.json"]
-        b = self._builder()
-        workdir = Path(self._plugin_dir or ".")
-        if b is not None:
-            for item in b.items():
-                kind = next((k for k in ("path", "dir", "pattern")
-                            if getattr(item, k, None) is not None), "pattern")
-                rel = getattr(item, kind, "")
-                is_entry = "entry" in item.tags
-                if kind == "pattern" and workdir.is_dir():
-                    matched = evaluate_pattern(workdir, rel)
-                    names = [Path(m).name for m in matched[:10]]
-                    extra = (f"…共 {len(matched)} 个" if len(matched) > 10
-                             else "")
-                    tree.append(
-                        f"    ├── {rel}（规则）→ {', '.join(names)} {extra}")
-                else:
-                    mark = " ← 编译产物" if item.derived \
-                        else (" ← 入口" if is_entry else "")
-                    shown = rel if kind != "dir" else rel.rstrip("/\\") + "/"
-                    tree.append(f"    ├── {shown}{mark}")
-        if tree:
-            tree[-1] = tree[-1].replace("├──", "└──", 1)
-        lines.extend(tree)
+        # 收集（来源无关）→ 渲染
+        items = self._collect_preview_items(out_dir)
+        self._render_preview(items, packer_name)
 
-        self._preview.configure(state="normal")
-        self._preview.delete("1.0", "end")
-        self._preview.insert("1.0", "\n".join(lines))
-        self._preview.configure(state="disabled")
+    def _guess_prod_dir(self, out_dir: str) -> Path | None:
+        """推导编译产物树目录（.pyi/<name> 或 .node/<name>）；未构建不存在。"""
+        if not self._plugin_dir or not self._pm:
+            return None
+        out = Path(out_dir) if out_dir else \
+            Path(self._plugin_dir) / "output"
+        project = self._pm.read_project() or {}
+        compiler = project.get("compiler", {}) or {}
+        system = compiler.get("compile_system", "")
+        if system == "node":
+            d = out / ".node" / Path(self._plugin_dir).name
+        elif system == "python":
+            d = out / ".pyi" / Path(self._plugin_dir).name
+        else:
+            return None
+        return d if d.is_dir() else None

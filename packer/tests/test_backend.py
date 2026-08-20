@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from backend.builder import BuildError, BuilderItem, evaluate_pattern
+from backend.builder import (BuildError, BuilderItem, ItemKind,
+                             evaluate_pattern)
 from backend.debug_runner import resolve_run_command
 from backend.packaging import (package_plugin, cleanup_intermediates,
                                resolve_packer_name)
@@ -41,9 +42,10 @@ def test_builder_items_and_tags(make_project):
     b.add_dir("assets")
     b.add_rule("dist/**")
     items = b.items()
-    assert items[0].to_dict() == {"path": "main.exe", "tags": ["entry"]}
-    assert items[1].to_dict() == {"dir": "assets"}
-    assert items[2].to_dict() == {"pattern": "dist/**"}
+    assert items[0].to_dict() == {"value": "main.exe", "kind": "file",
+                                  "tags": ["entry"]}
+    assert items[1].to_dict() == {"value": "assets", "kind": "dir"}
+    assert items[2].to_dict() == {"value": "dist/**", "kind": "pattern"}
     b.set_tags(1, ["entry"])
     assert "entry" in b.items()[1].tags
     b.remove_item(1)
@@ -58,20 +60,22 @@ def test_builder_view_index_mapping(make_project):
     """
     pm, b, _ = make_project()
     b.set_deduced([
-        BuilderItem(dir="node_modules", derived=True),
-        BuilderItem(path="start_node.py", tags=["entry"], derived=True),
+        BuilderItem(value="node_modules", kind=ItemKind.DIR, derived=True),
+        BuilderItem(value="start_node.py", kind=ItemKind.FILE, tags=["entry"],
+                    derived=True),
     ])
     b.add_file("package-lock.json")           # 手动（存储 = 视图 manual 部分）
     # 视图：node_modules、start_node.py、package-lock.json
     view = b.items()
-    assert view[0].dir == "node_modules"
-    assert view[1].path == "start_node.py"
-    assert view[2].path == "package-lock.json"
+    assert view[0].value == "node_modules" and view[0].kind is ItemKind.DIR
+    assert view[1].value == "start_node.py"
+    assert view[2].value == "package-lock.json"
     # 删除视图最后一项（package-lock.json）→ 只删它；deduced 不受影响
     b.remove_item(2)
     assert [i.to_dict() for i in b.items()] == [
-        {"dir": "node_modules", "derived": True},
-        {"path": "start_node.py", "tags": ["entry"], "derived": True}]
+        {"value": "node_modules", "kind": "dir", "derived": True},
+        {"value": "start_node.py", "kind": "file", "tags": ["entry"],
+         "derived": True}]
     # deduced 索引只读：对 deduced 范围调用删除为 no-op
     b.remove_item(0)
     assert len(b.items()) == 2
@@ -82,7 +86,7 @@ def test_builder_view_index_mapping(make_project):
     b.add_file("notes.txt")
     b.set_tags(2, ["entry"])   # 视图 2 = notes.txt（手动）
     items = b.items()
-    assert items[2].path == "notes.txt" and "entry" in items[2].tags
+    assert items[2].value == "notes.txt" and "entry" in items[2].tags
 
 
 def test_builder_entry_validation(make_project):
@@ -162,8 +166,9 @@ def test_python_compiler_deduce(make_project):
     py = get_compiler("python")
     assert [i.to_dict() for i in (py.deduce(
         {"manifest": "pyproject.toml"}, "my-plugin") or [])] == [
-        {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
-        {"dir": "_internal", "derived": True}]
+        {"value": "my-plugin.exe", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "_internal", "kind": "dir", "derived": True}]
     assert py.deduce({"manifest": ""}, "my-plugin") is None
     cmd = get_compiler("command")
     assert cmd.deduce({"compile": "x"}, "my-plugin") is None
@@ -178,17 +183,19 @@ def test_python_compiler_deduce_dependent(make_project):
     items = py.deduce({"manifest": "pyproject.toml",
                        "self_contained": False}, "my-plugin", plugin_dir) or []
     assert [i.to_dict() for i in items] == [
-        {"path": "src/main.py", "tags": ["entry"], "derived": True},
-        {"dir": "vendor", "derived": True},
-        {"dir": "src", "derived": True}]
+        {"value": "src/main.py", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "vendor", "kind": "dir", "derived": True},
+        {"value": "src", "kind": "dir", "derived": True}]
     # 入口在根 → 入口文件条目（无入口目录）
     (plugin_dir / "pyproject.toml").write_text(
         '[tool.dghub]\nentry="main.py"\n')
     items = py.deduce({"manifest": "pyproject.toml",
                        "self_contained": False}, "my-plugin", plugin_dir) or []
     assert [i.to_dict() for i in items] == [
-        {"path": "main.py", "tags": ["entry"], "derived": True},
-        {"dir": "vendor", "derived": True}]
+        {"value": "main.py", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "vendor", "kind": "dir", "derived": True}]
 
 
 def test_python_compiler_manifest_known():
@@ -238,13 +245,15 @@ def test_node_compiler_bundle_deduce(make_project):
     cfg = {"manifest": "package.json"}
     # true（默认）：SEA exe 作入口
     assert [i.to_dict() for i in (node.deduce(cfg, "my-plugin") or [])] == [
-        {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
-        {"dir": "node_modules", "derived": True}]
+        {"value": "my-plugin.exe", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "node_modules", "kind": "dir", "derived": True}]
     # false：start_node.py 作入口
     assert [i.to_dict() for i in (node.deduce(
         {**cfg, "self_contained": False}, "my-plugin") or [])] == [
-        {"path": "start_node.py", "tags": ["entry"], "derived": True},
-        {"dir": "node_modules", "derived": True}]
+        {"value": "start_node.py", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "node_modules", "kind": "dir", "derived": True}]
 
 
 def test_node_compiler_bundle_validate(make_project):
@@ -324,9 +333,10 @@ def test_fill_builder_only_fills_empty(make_project, make_ctx):
     # 编译产物条目：exe（入口）+ _internal/（derived）
     items = b.items()
     assert len(items) == 2
-    assert items[0].to_dict() == {"path": "testplugin.exe", "tags": ["entry"],
+    assert items[0].to_dict() == {"value": "testplugin.exe", "kind": "file",
+                                  "tags": ["entry"], "derived": True}
+    assert items[1].to_dict() == {"value": "_internal", "kind": "dir",
                                   "derived": True}
-    assert items[1].to_dict() == {"dir": "_internal", "derived": True}
     # 再次 fill 不重复添加
     fill_builder(ctx)
     assert len(b.items()) == 2
@@ -355,13 +365,13 @@ def test_fill_builder_merges_deduced(make_project, make_ctx):
     items = b.items()
     # 编译系统自持入口：手动 entry 降级，deduced entry（默认自包含 exe）接管
     entries = [i for i in items if "entry" in i.tags]
-    assert len(entries) == 1 and entries[0].path == "testplugin.exe"
+    assert len(entries) == 1 and entries[0].value == "testplugin.exe"
     assert entries[0].derived
-    manual = [i for i in items if i.path == "my-entry.js"]
+    manual = [i for i in items if i.value == "my-entry.js"]
     assert len(manual) == 1 and "entry" not in manual[0].tags
     assert not manual[0].derived  # 条目保留，仅摘 entry 标签
     # 缺失的 node_modules / dist 被补上
-    dirs = sorted(i.dir for i in items if i.dir)
+    dirs = sorted(i.value for i in items if i.kind is ItemKind.DIR)
     assert dirs == ["dist", "node_modules"]
 
 
@@ -373,8 +383,9 @@ def test_sync_derived_rebuilds_on_mode_change(make_project, make_ctx):
     (plugin_dir / "main.py").write_text("x")
     # 旧状态：自包含 deduced 视图（exe entry + _internal，内存不落盘）
     b.set_deduced([
-        BuilderItem(path="tetris-py.exe", tags=["entry"], derived=True),
-        BuilderItem(dir="_internal", derived=True),
+        BuilderItem(value="tetris-py.exe", kind=ItemKind.FILE, tags=["entry"],
+                    derived=True),
+        BuilderItem(value="_internal", kind=ItemKind.DIR, derived=True),
     ])
     # 手动条目保留
     b.add_file("notes.txt")
@@ -385,8 +396,7 @@ def test_sync_derived_rebuilds_on_mode_change(make_project, make_ctx):
     sync_derived(ctx)
     items = b.items()
     def key(i):
-        d = i.to_dict()
-        return d.get("path") or d.get("dir")
+        return i.value
     got = sorted((key(i), tuple(i.tags), i.derived) for i in items)
     assert got == [
         ("main.py", ("entry",), True),
@@ -424,12 +434,12 @@ def test_sync_derived_keeps_matching_manual_entry(make_project, make_ctx):
     items = b.items()
     # 手动条目继续充当入口（不重复推断、不降级）
     entries = [i for i in items if "entry" in i.tags]
-    assert len(entries) == 1 and entries[0].path == "src/main.py"
+    assert len(entries) == 1 and entries[0].value == "src/main.py"
     assert not entries[0].derived
     # vendor / 入口目录重建为 derived
-    vendor = [i for i in items if i.dir == "vendor"]
+    vendor = [i for i in items if i.value == "vendor"]
     assert len(vendor) == 1 and vendor[0].derived
-    src = [i for i in items if i.dir == "src"]
+    src = [i for i in items if i.value == "src"]
     assert len(src) == 1 and src[0].derived
 
 
@@ -448,10 +458,10 @@ def test_sync_derived_demotes_wrong_manual_entry(make_project, make_ctx):
     sync_derived(ctx)
     items = b.items()
     entries = [i for i in items if "entry" in i.tags]
-    assert len(entries) == 1 and entries[0].path == "src/main.py"
+    assert len(entries) == 1 and entries[0].value == "src/main.py"
     assert entries[0].derived
     # 旧手动 main.py 保留为普通内容
-    manual = [i for i in items if i.path == "main.py"]
+    manual = [i for i in items if i.value == "main.py"]
     assert len(manual) == 1 and "entry" not in manual[0].tags
     assert not manual[0].derived
 

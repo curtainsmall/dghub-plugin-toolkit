@@ -23,7 +23,7 @@ from backend.build_control import Canceller
 from backend.py_compiler import build_plugin_exe
 from backend.logbus import Logger
 from backend.winflags import _NO_WINDOW
-from backend.builder import BuilderItem
+from backend.builder import BuilderItem, ItemKind
 
 
 @dataclass
@@ -269,23 +269,25 @@ class PythonCompiler(Compiler):
         if not cfg.get("self_contained", True):
             # 依赖版：入口 = [tool.dghub].entry 相对路径（协议允许非根，
             # 宿主对 .py 入口注入 entry 目录 / 插件根 / vendor/）
-            items: list[BuilderItem] = [BuilderItem(dir="vendor",
-                                                    derived=True)]
+            items: list[BuilderItem] = [
+                BuilderItem(value="vendor", kind=ItemKind.DIR, derived=True)]
             if source_dir is not None:
                 entry = read_tool_dghub_entry(
                     source_dir / str(cfg.get("manifest", "")))
                 if entry:
-                    items.insert(0, BuilderItem(path=entry, tags=["entry"],
-                                                derived=True))
+                    items.insert(0, BuilderItem(
+                        value=entry, kind=ItemKind.FILE, tags=["entry"],
+                        derived=True))
                     entry_dir = str(Path(entry).parent)
                     if entry_dir not in ("", "."):
-                        items.append(BuilderItem(dir=entry_dir,
-                                                 derived=True))
+                        items.append(BuilderItem(
+                            value=entry_dir, kind=ItemKind.DIR,
+                            derived=True))
             return items
         return [
-            BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
-                        derived=True),
-            BuilderItem(dir="_internal", derived=True),
+            BuilderItem(value=f"{plugin_name}.exe", kind=ItemKind.FILE,
+                        tags=["entry"], derived=True),
+            BuilderItem(value="_internal", kind=ItemKind.DIR, derived=True),
         ]
 
     def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:
@@ -543,21 +545,25 @@ class NodeCompiler(Compiler):
             return None
         items: list[BuilderItem] = []
         if not cfg.get("self_contained", True):
-            items.append(BuilderItem(path="start_node.py", tags=["entry"],
-                                     derived=True))
+            items.append(BuilderItem(value="start_node.py", kind=ItemKind.FILE,
+                                     tags=["entry"], derived=True))
         else:
-            items.append(BuilderItem(path=f"{plugin_name}.exe", tags=["entry"],
+            items.append(BuilderItem(value=f"{plugin_name}.exe",
+                                     kind=ItemKind.FILE, tags=["entry"],
                                      derived=True))
-        items.append(BuilderItem(dir="node_modules", derived=True))
+        items.append(BuilderItem(value="node_modules", kind=ItemKind.DIR,
+                                 derived=True))
         # 入口所在目录（dist / src …）随产物收集；入口在根则只收入口文件
         if source_dir is not None:
             entry = read_package_json_main(
                 source_dir / str(cfg.get("manifest", "")))
             entry_dir = str(Path(entry).parent) if entry else ""
             if entry_dir not in ("", "."):
-                items.append(BuilderItem(dir=entry_dir, derived=True))
+                items.append(BuilderItem(value=entry_dir, kind=ItemKind.DIR,
+                                         derived=True))
             elif entry:
-                items.append(BuilderItem(path=entry, derived=True))
+                items.append(BuilderItem(value=entry, kind=ItemKind.FILE,
+                                         derived=True))
         return items
 
     def prod_dir(self, output_dir: Path, plugin_name: str) -> Path | None:

@@ -127,7 +127,7 @@ def locate_debug_entry(ctx, artifact: Path) -> Path | None:
     Node 自包含为 SEA exe、依赖版为 start_node.py。
     """
     item = ctx.builder.entry_item()
-    if item is not None and item.path is not None:
-        p = artifact / item.path
+    if item is not None and item.value is not None:
+        p = artifact / item.value
         return p if p.exists() else None
     return None
