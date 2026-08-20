@@ -46,6 +46,10 @@
 - **Packer**：预览 0 文件（resolve 因缺失条目整体中止）——收集改为
   逐条目求值
 - **Packer**：预览 Treeview 白色边框——样式统一为列表背景色
+- **Packer**：「按产物模式加后缀」未应用到正式构建——`resolve_packer_name`
+  消费的 `compile_cfg` 缺 `auto_suffix`（调试路径读取了、构建路径没读），
+  zip 包名无后缀而调试文件夹/预览树有；CLI 一并补读 `self_contained` +
+  `auto_suffix`（此前 CLI 依赖版项目误按自包含 deduce 且永不追加后缀）
 
 ## [0.14.0] - 2026-08-17
 
