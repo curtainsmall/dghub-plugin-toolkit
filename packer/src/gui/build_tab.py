@@ -212,7 +212,7 @@ class BuildTab(ctk.CTkFrame):
         ToolTip(legend_icon, rich=[
             ("入口文件（含所在目录）\n", "#4CAF50"),
             ("manifest.json（清单）\n", "#F5C518"),
-            ("编译产物\n", "#888888"),
+            ("尚未生成（构建后生成）\n", "#888888"),
             ("缺失条目", "#E5484D"),
         ])
         # 产物树（根 = 包名，可折叠）
@@ -788,8 +788,7 @@ class BuildTab(ctk.CTkFrame):
             "derived", foreground=("#888888" if dark else "#777777"))
         self._preview.tag_configure(
             "manifest", foreground=("#F5C518" if dark else "#B8860B"))
-        self._preview.tag_configure("missing",
-                                    foreground="#E5484D", font=("", 0, "bold"))
+        self._preview.tag_configure("missing", foreground="#E5484D")
 
     def _preview_ins(self, parent: str, text: str,
                      tag: str = "") -> str:
@@ -922,9 +921,8 @@ class BuildTab(ctk.CTkFrame):
                 continue  # 已在文件树中（如 src/ 由 src/main.py 建立）
             self._preview_ins(root, f"{it.arc}/", "derived")
         if missing:
-            self._preview_ins(root, f"缺失 {len(missing)} 个条目", "missing")
             for it in sorted(missing, key=lambda x: x.arc):
-                self._preview_ins(root, f"✗ {it.arc}", "missing")
+                self._preview_ins(root, it.arc, "missing")
         # 展开根节点（子节点可见）
         self._preview.item(root, open=True)
 
