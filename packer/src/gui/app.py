@@ -437,6 +437,12 @@ class App(ctk.CTk):
         """组装校验/构建共用的上下文（构建页内嵌编译设置状态）。"""
         plugin_dir = Path(self._plugin_dir or ".")
         compile_view = self._dist_view.get_compile_view()
+        cfg = compile_view.get_compile_cfg()
+        if cfg:
+            # 后缀开关属于发布选项（构建页），补进 compile_cfg 供
+            # resolve_packer_name 消费（调试路径已含 auto_suffix）
+            cfg = {**cfg,
+                   "auto_suffix": self._dist_view.get_auto_suffix()}
         return BuildContext(
             plugin_dir=plugin_dir,
             source_dir=Path(self._plugin_dir or "."),
@@ -451,7 +457,7 @@ class App(ctk.CTk):
             pm=self._pm,
             pypi_index=self._settings_view.get_pypi_index(),
             canceller=self._canceller,
-            compile_cfg=compile_view.get_compile_cfg(),
+            compile_cfg=cfg,
         )
 
     # ------------------------------------------------------------------

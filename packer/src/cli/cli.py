@@ -77,10 +77,18 @@ def _make_ctx(pm: ProjectManager, plugin_dir: str, logger: Logger,
         case "python":
             compile_cfg = {
                 "manifest": project.get("compiler", {}).get("manifest", ""),
+                "self_contained": project.get("compiler", {}).get(
+                    "self_contained", True),
+                "auto_suffix": project.get("compiler", {}).get(
+                    "auto_suffix", False),
             }
         case "node":
             compile_cfg = {
                 "manifest": project.get("compiler", {}).get("manifest", ""),
+                "self_contained": project.get("compiler", {}).get(
+                    "self_contained", True),
+                "auto_suffix": project.get("compiler", {}).get(
+                    "auto_suffix", False),
             }
         case "command":
             compile_cfg = {

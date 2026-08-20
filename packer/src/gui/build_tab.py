@@ -590,6 +590,10 @@ class BuildTab(ctk.CTkFrame):
     # accessors（供 app.py / 预览）
     # ------------------------------------------------------------------
 
+    def get_auto_suffix(self) -> bool:
+        """「按产物模式加后缀」开关当前值（构建上下文组装用）。"""
+        return bool(self._auto_suffix_var.get())
+
     def mark_errors(self, rels: set[str], area_msg: str = "") -> None:
         """标记校验错误：条目级（红框红字）+ 区域级（容器红框 + 提示）。"""
         self._error_rels = set(rels)
