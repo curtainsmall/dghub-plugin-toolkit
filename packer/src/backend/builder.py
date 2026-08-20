@@ -166,17 +166,17 @@ class Builder:
         return n
 
     def remove_item(self, idx: int) -> None:
-        """删除条目（视图索引）——deduced 只读，仅手动条目可删。"""
+        """删除条目（视图索引）——manifest/deduced 只读，仅手动条目可删。"""
         files = self._files()
-        mi = idx - len(self._deduced)
+        mi = idx - 1 - len(self._deduced)
         if 0 <= mi < len(files):
             files.pop(mi)
             self._save(files)
 
     def set_tags(self, idx: int, tags: list[str]) -> None:
-        """贴/改标签（如标为 entry）——视图索引，deduced 条目只读。"""
+        """贴/改标签（如标为 entry）——视图索引，manifest/deduced 只读。"""
         files = self._files()
-        mi = idx - len(self._deduced)
+        mi = idx - 1 - len(self._deduced)
         if 0 <= mi < len(files):
             files[mi].tags = list(tags)
             self._save(files)
@@ -198,19 +198,24 @@ class Builder:
         return n
 
     def set_path(self, idx: int, rel: str) -> None:
-        """替换条目值（保持类型与标签不变）——视图索引，deduced 只读。"""
+        """替换条目值（保持类型与标签不变）——视图索引，manifest/deduced 只读。"""
         files = self._files()
-        mi = idx - len(self._deduced)
+        mi = idx - 1 - len(self._deduced)
         if 0 <= mi < len(files):
             files[mi].value = rel
             self._save(files)
 
     def items(self) -> list[BuilderItem]:
-        """条目列表：deduced（编译产物，视图在前）+ 手动条目。
+        """条目列表：manifest.json + deduced（编译产物）+ 手动条目。
 
-        deduced 顺序即 deduce 返回顺序（入口在前）；手动保持添加顺序。
+        manifest.json 固定为视图首位（打包时生成的固定产物，packaging
+        注入 zip/文件夹），只读 derived 声明；deduced 顺序即 deduce
+        返回顺序（入口在前）；手动保持添加顺序。resolve 收集时 manifest
+        的 derived 分支在产物树中找不到即跳过，不会重复收集。
         """
-        return self._deduced + self._files()
+        return [BuilderItem(value="manifest.json", kind=ItemKind.FILE,
+                            derived=True, tags=["manifest"])] \
+            + self._deduced + self._files()
 
     # ------------------------------------------------------------------
     # 发布选项（发布形态固定 zip；folder 仅调试用内存覆盖，不落盘）

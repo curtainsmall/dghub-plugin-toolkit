@@ -50,9 +50,10 @@ _KIND_STYLES = {
     "pattern": (("#F8E8D8", "#6A4A2A"), "规则"),
 }
 
-# 标签徽章样式：标签 → ((bg_light, bg_dark), 显示名)
+# 标签徽章样式：标签 → ((bg, fg), 显示名)
 _TAG_STYLES = {
     "entry": (("#4CAF50", "#2E7D32"), "入口"),
+    "manifest": (("#F5C518", "#B8860B"), "清单"),
 }
 
 
@@ -420,9 +421,12 @@ class BuildTab(ctk.CTkFrame):
             is_derived = bool(item.derived)
             if is_derived:
                 # 编译产物：显示相对插件目录的路径（输出目录/.pyi/<插件名>/...）
-                out_rel = (b.get_output_dir() or "output").rstrip("/\\")
-                plugin_name = Path(self._plugin_dir or ".").name
-                display = f"{out_rel}/.pyi/{plugin_name}/{rel}"
+                if "manifest" in tags:
+                    display = rel  # 打包时生成的固定文件，无产物路径
+                else:
+                    out_rel = (b.get_output_dir() or "output").rstrip("/\\")
+                    plugin_name = Path(self._plugin_dir or ".").name
+                    display = f"{out_rel}/.pyi/{plugin_name}/{rel}"
                 if kind == "dir":
                     display += "/"
             else:
@@ -438,6 +442,14 @@ class BuildTab(ctk.CTkFrame):
             # 入口徽章：位于文件名右侧（仍左对齐区域）
             if "entry" in tags:
                 (tbg, tfg), tname = _TAG_STYLES["entry"]
+                ctk.CTkLabel(inner, text=tname, width=36,
+                             font=ctk.CTkFont(size=10, weight="bold"),
+                             fg_color=tbg, text_color=tfg,
+                             corner_radius=4).pack(side="left",
+                                                    padx=(2, 0))
+            # manifest 徽章：打包生成的固定文件（黄色，如入口徽章）
+            if "manifest" in tags:
+                (tbg, tfg), tname = _TAG_STYLES["manifest"]
                 ctk.CTkLabel(inner, text=tname, width=36,
                              font=ctk.CTkFont(size=10, weight="bold"),
                              fg_color=tbg, text_color=tfg,
@@ -765,6 +777,8 @@ class BuildTab(ctk.CTkFrame):
         self._preview.tag_configure("entry", foreground="#4CAF50")
         self._preview.tag_configure(
             "derived", foreground=("#888888" if dark else "#777777"))
+        self._preview.tag_configure(
+            "manifest", foreground=("#F5C518" if dark else "#B8860B"))
         self._preview.tag_configure("missing",
                                     foreground="#E5484D", font=("", 0, "bold"))
 
@@ -779,10 +793,12 @@ class BuildTab(ctk.CTkFrame):
                       parent: str) -> None:
         """按路径分目录插入产物树（arc → 嵌套节点）。
 
-        叶子标注：入口绿色、编译产物灰。
+        叶子标注：入口绿色、编译产物灰；目录若包含入口文件
+        （如 src/ 含 src/main.py）也标绿。
         """
         root: dict[str, Any] = {}
         by_arc: dict[str, PreviewItem] = {}
+        entry_arcs = [it.arc for it in items if it.entry]
         for it in items:
             by_arc[it.arc] = it
             node = root
@@ -794,11 +810,15 @@ class BuildTab(ctk.CTkFrame):
                 children = d[key]
                 path = f"{prefix}/{key}" if prefix else key
                 if children:
-                    nid = self._preview_ins(pid, key + "/")
+                    tag = ("entry" if any(
+                        a.startswith(path + "/") for a in entry_arcs) else "")
+                    nid = self._preview_ins(pid, key + "/", tag)
                     _ins(children, nid, path)
                 else:
                     src = by_arc.get(path)
-                    if src is not None and src.entry:
+                    if src is not None and src.arc == "manifest.json":
+                        leaf_tag = "manifest"
+                    elif src is not None and src.entry:
                         leaf_tag = "entry"
                     elif src is not None and src.derived:
                         leaf_tag = "derived"
@@ -828,6 +848,11 @@ class BuildTab(ctk.CTkFrame):
             rel = item.value
             is_entry = "entry" in item.tags
             if item.derived:
+                if rel == "manifest.json":
+                    # 打包时由 packaging 生成（zip/文件夹注入），
+                    # 产物树中不存在——恒为声明行
+                    items.append(PreviewItem(rel, "file", derived=True))
+                    continue
                 if prod is None:
                     # 未构建/已打包：文件为声明、目录单行
                     if item.kind is ItemKind.DIR:
@@ -904,13 +929,12 @@ class BuildTab(ctk.CTkFrame):
 
         # ---- 产物树（根 = 包名，子 = zip 内文件；输出目录全局可见）----
         root = self._preview_ins("", f"📁 {packer_name}/")
-        self._preview_ins(root, "manifest.json")
         self._preview_arcs(files, root)
         tree_dirs = {it.arc.split("/")[0] for it in files}
         for it in dirs:
             if it.arc in tree_dirs:
                 continue  # 已在文件树中（如 src/ 由 src/main.py 建立）
-            self._preview_ins(root, f"{it.arc}/（编译产物）", "derived")
+            self._preview_ins(root, f"{it.arc}/", "derived")
         if missing:
             self._preview_ins(root, f"缺失 {len(missing)} 个条目", "missing")
             for it in sorted(missing, key=lambda x: x.arc):

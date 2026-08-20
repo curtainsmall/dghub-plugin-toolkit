@@ -42,14 +42,16 @@ def test_builder_items_and_tags(make_project):
     b.add_dir("assets")
     b.add_rule("dist/**")
     items = b.items()
-    assert items[0].to_dict() == {"value": "main.exe", "kind": "file",
+    assert items[0].to_dict() == {"value": "manifest.json", "kind": "file",
+                                  "tags": ["manifest"], "derived": True}
+    assert items[1].to_dict() == {"value": "main.exe", "kind": "file",
                                   "tags": ["entry"]}
-    assert items[1].to_dict() == {"value": "assets", "kind": "dir"}
-    assert items[2].to_dict() == {"value": "dist/**", "kind": "pattern"}
-    b.set_tags(1, ["entry"])
-    assert "entry" in b.items()[1].tags
-    b.remove_item(1)
-    assert len(b.items()) == 2
+    assert items[2].to_dict() == {"value": "assets", "kind": "dir"}
+    assert items[3].to_dict() == {"value": "dist/**", "kind": "pattern"}
+    b.set_tags(2, ["entry"])      # 视图 2 = assets（manifest 固定占 0）
+    assert "entry" in b.items()[2].tags
+    b.remove_item(2)              # 删 assets
+    assert len(b.items()) == 3    # manifest + main.exe + dist/**
 
 
 def test_builder_view_index_mapping(make_project):
@@ -65,28 +67,31 @@ def test_builder_view_index_mapping(make_project):
                     derived=True),
     ])
     b.add_file("package-lock.json")           # 手动（存储 = 视图 manual 部分）
-    # 视图：node_modules、start_node.py、package-lock.json
+    # 视图：manifest.json、node_modules、start_node.py、package-lock.json
     view = b.items()
-    assert view[0].value == "node_modules" and view[0].kind is ItemKind.DIR
-    assert view[1].value == "start_node.py"
-    assert view[2].value == "package-lock.json"
-    # 删除视图最后一项（package-lock.json）→ 只删它；deduced 不受影响
-    b.remove_item(2)
+    assert view[0].value == "manifest.json" and "manifest" in view[0].tags
+    assert view[1].value == "node_modules" and view[1].kind is ItemKind.DIR
+    assert view[2].value == "start_node.py"
+    assert view[3].value == "package-lock.json"
+    # 删除视图最后一项（package-lock.json）→ 只删它；manifest/deduced 不受影响
+    b.remove_item(3)
     assert [i.to_dict() for i in b.items()] == [
+        {"value": "manifest.json", "kind": "file", "tags": ["manifest"],
+         "derived": True},
         {"value": "node_modules", "kind": "dir", "derived": True},
         {"value": "start_node.py", "kind": "file", "tags": ["entry"],
          "derived": True}]
-    # deduced 索引只读：对 deduced 范围调用删除为 no-op
-    b.remove_item(0)
-    assert len(b.items()) == 2
-    # set_tags 视图索引：改 start_node.py（视图 1，deduced）为 no-op；
-    # 手动条目（视图 0 之后）可改
-    b.set_tags(1, [])   # deduced 只读 → 标签不变
-    assert "entry" in b.items()[1].tags
+    # manifest/deduced 索引只读：对只读范围调用删除为 no-op
+    b.remove_item(1)
+    assert len(b.items()) == 3
+    # set_tags 视图索引：改 start_node.py（视图 2，deduced）为 no-op；
+    # 手动条目（只读区之后）可改
+    b.set_tags(2, [])   # deduced 只读 → 标签不变
+    assert "entry" in b.items()[2].tags
     b.add_file("notes.txt")
-    b.set_tags(2, ["entry"])   # 视图 2 = notes.txt（手动）
+    b.set_tags(3, ["entry"])   # 视图 3 = notes.txt（手动）
     items = b.items()
-    assert items[2].value == "notes.txt" and "entry" in items[2].tags
+    assert items[3].value == "notes.txt" and "entry" in items[3].tags
 
 
 def test_builder_entry_validation(make_project):
@@ -99,8 +104,8 @@ def test_builder_entry_validation(make_project):
     b.add_file("other.exe", ["entry"])
     assert any("重复" in e for e in b.entry_errors(plugin_dir))
     # 目录/规则不能作 entry（先移除文件条目，只剩 dir 条目）
-    b.remove_item(0)
-    b.remove_item(0)
+    b.remove_item(1)   # 视图 1 = main.exe（manifest 固定占 0）
+    b.remove_item(1)   # 视图 1 = other.exe
     b.add_dir("assets", ["entry"])
     assert any("单个文件" in e for e in b.entry_errors(plugin_dir))
 
@@ -330,21 +335,23 @@ def test_fill_builder_only_fills_empty(make_project, make_ctx):
     applied = fill_builder(ctx)
     assert applied and any("入口" in a for a in applied)
     assert b.entry_errors(plugin_dir) == []
-    # 编译产物条目：exe（入口）+ _internal/（derived）
+    # 编译产物条目：manifest.json（固定首位）+ exe（入口）+ _internal/（derived）
     items = b.items()
-    assert len(items) == 2
-    assert items[0].to_dict() == {"value": "testplugin.exe", "kind": "file",
+    assert len(items) == 3
+    assert items[0].to_dict() == {"value": "manifest.json", "kind": "file",
+                                  "tags": ["manifest"], "derived": True}
+    assert items[1].to_dict() == {"value": "testplugin.exe", "kind": "file",
                                   "tags": ["entry"], "derived": True}
-    assert items[1].to_dict() == {"value": "_internal", "kind": "dir",
+    assert items[2].to_dict() == {"value": "_internal", "kind": "dir",
                                   "derived": True}
     # 再次 fill 不重复添加
     fill_builder(ctx)
-    assert len(b.items()) == 2
+    assert len(b.items()) == 3
     # 无编译 → 也清除旧 derived，返回清除提示（非 None）
     ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="")
     applied = fill_builder(ctx2)
     assert applied and any("已刷新" in a for a in applied)
-    assert len(b.items()) == 0  # derived 全清，用户条目无
+    assert len(b.items()) == 1  # derived 全清，只剩 manifest.json 固定声明
 
 
 def test_fill_builder_merges_deduced(make_project, make_ctx):
@@ -400,6 +407,7 @@ def test_sync_derived_rebuilds_on_mode_change(make_project, make_ctx):
     got = sorted((key(i), tuple(i.tags), i.derived) for i in items)
     assert got == [
         ("main.py", ("entry",), True),
+        ("manifest.json", ("manifest",), True),
         ("notes.txt", (), False),
         ("vendor", (), True),
     ]
@@ -412,6 +420,7 @@ def test_sync_derived_rebuilds_on_mode_change(make_project, make_ctx):
     got = sorted((key(i), tuple(i.tags), i.derived) for i in items)
     assert got == [
         ("_internal", (), True),
+        ("manifest.json", ("manifest",), True),
         ("notes.txt", (), False),
         (f"{plugin_dir.name}.exe", ("entry",), True),
     ]
