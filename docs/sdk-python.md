@@ -194,7 +194,7 @@ Packer 的 Python 编译系统（Python (uv + PyInstaller)）只从
 ### 入口声明
 
 插件入口由 `pyproject.toml` 的 `[tool.dghub].entry` 声明（相对清单文件
-所在目录）。该声明仅供 Packer 使用（构建与调试源码时读取），SDK 运行时
+所在目录）。该声明仅供 Packer 使用（构建与调试时读取），SDK 运行时
 不需要：
 
 ```toml
@@ -205,7 +205,9 @@ entry = "src/main.py"
 依赖清单**仅接受 `pyproject.toml`**——`setup.py` / `setup.cfg` /
 `requirements*.txt` 无法声明入口，不被接受。
 
-### 构建流程（Packer 自动执行，两步）
+### 构建流程（Packer 自动执行）
+
+**自包含（构建页「编译设置」的「自包含」复选框勾选，默认）**：
 
 1. **安装依赖**：`uv pip install --target .deps/ -r pyproject.toml`
    （装到输出目录的 `.deps/`，构建后清理；设置页 PyPI 镜像源经
@@ -218,9 +220,20 @@ entry = "src/main.py"
    - 命名空间包（无 `__init__.py`）整体 `--add-data` 复制源码 +
      `--hidden-import` 收集其 import 的宿主包子模块（tiktoken_ext 等）
 
+**依赖版（不勾选）**：
+
+1. **安装依赖**：`uv pip install --target vendor/ -r pyproject.toml`
+   （装到产物树 `.pyi/<插件名>/vendor/`，跳过 PyInstaller）
+2. 产物 = `vendor/` 依赖目录 + `[tool.dghub].entry` 入口目录（源码随
+   产物收集）——`manifest.entry` 直接指向入口源码（相对插件根的路径，
+   非根目录合法），宿主用本机 Python 运行并自动注入 `vendor/` 导入
+   路径（协议原生），目标机需预装 Python
+
 ### 产物布局
 
-`<输出目录>/.pyi/<插件名>/` 下（PyInstaller onedir）：
+`<输出目录>/.pyi/<插件名>/` 下：
+
+**自包含（勾选）**——目标机零安装：
 
 ```
 .pyi/<插件名>/
@@ -228,15 +241,26 @@ entry = "src/main.py"
 └── _internal/       # 依赖与资源（PyInstaller onedir 产物）
 ```
 
+**依赖版（不勾选）**——体积小，目标机需装 Python：
+
+```
+.pyi/<插件名>/
+├── vendor/          # 依赖（uv 安装；宿主自动加入导入路径）
+└── src/             # 入口所在目录（[tool.dghub].entry 源码随产物收集）
+```
+
+`manifest.entry` 相应为 `<插件名>.exe`（自包含）或 `[tool.dghub].entry`
+源码（依赖版）。构建页「按产物模式加后缀」复选框开启时，包名自动
+追加 `-self_contained` 或 `-dependent` 后缀（可在设置页自定义）。
+
 ### 插件作者须知
 
 - **为什么不使用项目的 `.spec` / `[tool.pyinstaller]`**：产物条目
   （exe + `_internal/`）与产物位置由 Packer 固定（收集管线按此解析），
   自由定制会破坏产物收集。PyInstaller 的配置优先级为 CLI > pyproject，
   未被 Packer CLI 覆盖的字段（如 `icon`）可能隐式生效——无文档承诺，
-  **不建议依赖**
-- 调试构建：`uv run --project <插件目录>` 直接运行入口源码
-  （`[tool.dghub].entry`）
+  **不建议依赖**（依赖版模式不涉及 PyInstaller）
+- 调试构建：构建产物后运行（增量缓存），依赖版即运行入口源码
 
 ---
 

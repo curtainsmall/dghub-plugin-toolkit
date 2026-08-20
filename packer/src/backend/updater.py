@@ -24,7 +24,7 @@ class DownloadCancelled(Exception):
 def get_current_version() -> str:
     """读取构建期注入的版本号；开发模式返回 "dev"。"""
     try:
-        from backend._version import __version__ as version
+        from backend._version import __version__ as version  # type: ignore[reportMissingImports]
         return version
     except ImportError:
         return "dev"

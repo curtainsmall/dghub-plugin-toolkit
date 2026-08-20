@@ -36,13 +36,14 @@ dgpacker-cli --version
     "compile_system": "python",
     "compile": "",
     "compile_dir": "",
-    "manifest": "pyproject.toml"
+    "manifest": "pyproject.toml",
+    "self_contained": true,
+    "auto_suffix": false
   },
   "builder": {
     "files": [
-      { "path": "my-plugin.exe", "tags": ["entry"] },
-      { "dir": "assets" },
-      { "pattern": "dist/**" }
+      { "path": "assets/logo.png" },
+      { "dir": "assets" }
     ],
     "output_dir": "",
     "packer_name": ""
@@ -58,6 +59,8 @@ dgpacker-cli --version
 | `compile` | string | CommandCompiler 命令（`"command"` 时必填） |
 | `compile_dir` | string | CommandCompiler 执行目录（空 = 项目根） |
 | `manifest` | string | Python/Node.js 编译的依赖清单（`"python"`/`"node"` 时必填） |
+| `self_contained` | bool | 产物模式：`true` 自包含（默认，运行时打进 exe）/ `false` 依赖版（`vendor/` 分发，目标机需 Python/Node 运行时） |
+| `auto_suffix` | bool | 构建页「按产物模式加后缀」：开启时包名自动追加 `-self_contained` / `-dependent`（后缀文本可在设置页自定义，存于 `~/.dghub-sdk-packer`） |
 
 **builder 节**（打包配置）：
 
@@ -67,12 +70,21 @@ dgpacker-cli --version
 | `output_dir` | string | 输出目录（空 = 插件目录/output） |
 | `packer_name` | string | 自定义包名（空 = 插件目录名） |
 
-**files 条目**：`path` / `dir` / `pattern` 三选一；`tags` 可含 `"entry"`
-（入口标记，恰好一个，缺失/重复校验报错）；编译产物条目带 `derived: true`
-（自动声明，勿手工维护）。
+**files 条目**：`value` + `kind`（`"file"` / `"dir"` / `"pattern"`）；
+旧格式 `path` / `dir` / `pattern` 三选一在读取时自动迁移。**入口
+（entry）不持久化**——完全由编译系统 deduce 自动生成：Python 自包含
+为 `<插件名>.exe`、依赖版为 `[tool.dghub].entry` 源码；Node.js 自包含
+为 SEA exe、依赖版为 `bootstrap.py` 启动脚本。旧数据中的
+`tags: ["entry"]` 读取时兼容（迁移期生效）。**编译产物条目（exe /
+`_internal` / `node_modules` / `vendor` 等）不落盘**——总能从编译设置
+（`compile_system` + `manifest` + `self_contained`）推导，运行时注入
+视图，`project.json` 只保存手动打包内容；`manifest.json` 作为固定声明
+条目始终在视图首位；旧版残留的 `derived` / `auto` 条目在加载时自动
+清理。
 
-编译入口不在 project.json：Python 由 `pyproject.toml` 的 `[tool.dghub].entry`
-声明，Node.js 由 `package.json` 的 `main` 字段声明，CLI 构建时直接读取。
+编译入口声明（Packer 构建时读取，不写入 project.json）：Python 由
+`pyproject.toml` 的 `[tool.dghub].entry` 声明，Node.js 由
+`package.json` 的 `main` 字段声明。
 
 ## CI 示例
 

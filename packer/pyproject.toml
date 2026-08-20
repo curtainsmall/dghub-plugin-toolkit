@@ -16,6 +16,10 @@ test = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.pyright]
+# backend/gui/cli 为 src 下的顶层包（测试经 sys.path 注入）
+extraPaths = ["src"]
+
 [tool.uv]
 # Packer 是应用而非库，uv sync 仅安装依赖，不构建自身
 package = false

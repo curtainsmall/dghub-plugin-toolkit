@@ -5,9 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from backend.builder import BuildError, evaluate_pattern
-from backend.packaging import package_plugin, cleanup_intermediates
-from backend.pipeline import fill_builder, run_build, validate
+from backend.builder import (BuildError, BuilderItem, ItemKind,
+                             evaluate_pattern)
+from backend.debug_runner import resolve_run_command
+from backend.packaging import (package_plugin, cleanup_intermediates,
+                               resolve_packer_name)
+from backend.pipeline import fill_builder, run_build, sync_derived, validate
 from backend.compilers import COMPILERS, get_compiler
 from backend.py_compiler import (_scan_ns_hidden_imports,
                                   _scan_toplevel_packages)
@@ -35,32 +38,80 @@ def test_unknown_keys_preserved(make_project):
 
 def test_builder_items_and_tags(make_project):
     pm, b, _ = make_project()
-    b.add_file("main.exe", ["entry"])
+    b.add_file("main.exe", ["entry"])   # entry 标签不持久化（deduce 自动生成）
     b.add_dir("assets")
     b.add_rule("dist/**")
     items = b.items()
-    assert items[0].to_dict() == {"path": "main.exe", "tags": ["entry"]}
-    assert items[1].to_dict() == {"dir": "assets"}
-    assert items[2].to_dict() == {"pattern": "dist/**"}
-    b.set_tags(1, ["entry"])
-    assert "entry" in b.items()[1].tags
+    assert items[0].to_dict() == {"value": "manifest.json", "kind": "file",
+                                  "tags": ["manifest"], "derived": True}
+    assert items[1].to_dict() == {"value": "main.exe", "kind": "file"}
+    assert items[2].to_dict() == {"value": "assets", "kind": "dir"}
+    assert items[3].to_dict() == {"value": "dist/**", "kind": "pattern"}
+    b.set_tags(2, ["entry"])      # 视图 2 = assets；entry 手动设置不持久化
+    assert b.items()[2].value == "assets" and "entry" not in b.items()[2].tags
+    b.remove_item(2)              # 删 assets
+    assert len(b.items()) == 3    # manifest + main.exe + dist/**
+
+
+def test_builder_view_index_mapping(make_project):
+    """视图（deduced 在前 + 手动）索引下，删除/改标签命中正确条目。
+
+    回归：Node 模式列表（deduced 在前的视图）中删除手动条目，
+    曾误删前一个条目。
+    """
+    pm, b, _ = make_project()
+    b.set_deduced([
+        BuilderItem(value="node_modules", kind=ItemKind.DIR, derived=True),
+        BuilderItem(value="bootstrap.py", kind=ItemKind.FILE, tags=["entry"],
+                    derived=True),
+    ])
+    b.add_file("package-lock.json")           # 手动（存储 = 视图 manual 部分）
+    # 视图：manifest.json、node_modules、bootstrap.py、package-lock.json
+    view = b.items()
+    assert view[0].value == "manifest.json" and "manifest" in view[0].tags
+    assert view[1].value == "node_modules" and view[1].kind is ItemKind.DIR
+    assert view[2].value == "bootstrap.py"
+    assert view[3].value == "package-lock.json"
+    # 删除视图最后一项（package-lock.json）→ 只删它；manifest/deduced 不受影响
+    b.remove_item(3)
+    assert [i.to_dict() for i in b.items()] == [
+        {"value": "manifest.json", "kind": "file", "tags": ["manifest"],
+         "derived": True},
+        {"value": "node_modules", "kind": "dir", "derived": True},
+        {"value": "bootstrap.py", "kind": "file", "tags": ["entry"],
+         "derived": True}]
+    # manifest/deduced 索引只读：对只读范围调用删除为 no-op
     b.remove_item(1)
-    assert len(b.items()) == 2
+    assert len(b.items()) == 3
+    # set_tags 视图索引：改 bootstrap.py（视图 2，deduced）为 no-op；
+    # 手动条目（只读区之后）可改
+    b.set_tags(2, [])   # deduced 只读 → 标签不变
+    assert "entry" in b.items()[2].tags
+    b.add_file("notes.txt")
+    b.set_tags(3, ["entry"])   # 视图 3 = notes.txt；entry 手动设置不持久化
+    items = b.items()
+    assert items[3].value == "notes.txt" and "entry" not in items[3].tags
 
 
 def test_builder_entry_validation(make_project):
+    """入口由 deduce 自动生成：deduced entry 满足 / 重复 / 目录报错。"""
     pm, b, plugin_dir = make_project()
     # 缺失 entry
     assert any("入口" in e for e in b.entry_errors(plugin_dir))
-    b.add_file("main.exe", ["entry"])
+    # deduced 注入入口
+    b.set_deduced([BuilderItem(value="main.exe", kind=ItemKind.FILE,
+                               tags=["entry"], derived=True)])
     assert b.entry_errors(plugin_dir) == []
     # 多个 entry
-    b.add_file("other.exe", ["entry"])
+    b.set_deduced([
+        BuilderItem(value="a.exe", kind=ItemKind.FILE, tags=["entry"],
+                    derived=True),
+        BuilderItem(value="b.exe", kind=ItemKind.FILE, tags=["entry"],
+                    derived=True)])
     assert any("重复" in e for e in b.entry_errors(plugin_dir))
-    # 目录/规则不能作 entry（先移除文件条目，只剩 dir 条目）
-    b.remove_item(0)
-    b.remove_item(0)
-    b.add_dir("assets", ["entry"])
+    # 目录不能作 entry
+    b.set_deduced([BuilderItem(value="assets", kind=ItemKind.DIR,
+                               tags=["entry"], derived=True)])
     assert any("单个文件" in e for e in b.entry_errors(plugin_dir))
 
 
@@ -70,7 +121,7 @@ def test_builder_resolve_preserves_subdirs(make_project):
     (plugin_dir / "assets" / "sub" / "x.dat").write_text("x")
     (plugin_dir / "assets" / "a.txt").write_text("a")
     (plugin_dir / "main.exe").write_text("exe")
-    b.add_file("main.exe", ["entry"])
+    b.add_file("main.exe")
     b.add_dir("assets")
     files = b.resolve(plugin_dir)
     arcs = [arc for _, arc in files]
@@ -84,7 +135,7 @@ def test_builder_resolve_dedup_and_errors(make_project):
     (plugin_dir / "assets").mkdir()
     (plugin_dir / "assets" / "x.dat").write_text("x")
     (plugin_dir / "main.exe").write_text("exe")
-    b.add_file("main.exe", ["entry"])
+    b.add_file("main.exe")
     b.add_dir("assets")
     b.add_rule("assets/**")                # 与 dir 条目重叠
     files = b.resolve(plugin_dir)
@@ -123,13 +174,38 @@ def test_python_compiler_probe(tmp_path):
 
 def test_python_compiler_deduce(make_project):
     py = get_compiler("python")
-    assert [i.to_dict() for i in py.deduce(
-        {"manifest": "pyproject.toml"}, "my-plugin")] == [
-        {"path": "my-plugin.exe", "tags": ["entry"], "derived": True},
-        {"dir": "_internal", "derived": True}]
+    assert [i.to_dict() for i in (py.deduce(
+        {"manifest": "pyproject.toml"}, "my-plugin") or [])] == [
+        {"value": "my-plugin.exe", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "_internal", "kind": "dir", "derived": True}]
     assert py.deduce({"manifest": ""}, "my-plugin") is None
     cmd = get_compiler("command")
     assert cmd.deduce({"compile": "x"}, "my-plugin") is None
+
+
+def test_python_compiler_deduce_dependent(make_project):
+    """Python 依赖版（self_contained=false）：源码入口 + vendor/ + 入口目录。"""
+    py = get_compiler("python")
+    pm, _, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        '[tool.dghub]\nentry="src/main.py"\n')
+    items = py.deduce({"manifest": "pyproject.toml",
+                       "self_contained": False}, "my-plugin", plugin_dir) or []
+    assert [i.to_dict() for i in items] == [
+        {"value": "src/main.py", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "vendor", "kind": "dir", "derived": True},
+        {"value": "src", "kind": "dir", "derived": True}]
+    # 入口在根 → 入口文件条目（无入口目录）
+    (plugin_dir / "pyproject.toml").write_text(
+        '[tool.dghub]\nentry="main.py"\n')
+    items = py.deduce({"manifest": "pyproject.toml",
+                       "self_contained": False}, "my-plugin", plugin_dir) or []
+    assert [i.to_dict() for i in items] == [
+        {"value": "main.py", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "vendor", "kind": "dir", "derived": True}]
 
 
 def test_python_compiler_manifest_known():
@@ -169,7 +245,72 @@ def test_compiler_registry():
     none_comp = get_compiler("")
     assert none_comp.id == "" and none_comp.label == "无"
     assert get_compiler("unknown") is none_comp
-    assert none_comp.run(object()) is True  # 阶段 1 空操作
+    # 阶段 1 空操作（run 不读取 ctx 内容）
+    assert none_comp.run(object()) is True  # type: ignore[reportArgumentType]
+
+
+def test_node_compiler_bundle_deduce(make_project):
+    """Node 产物模式：self_contained=true（默认）vs false 推导不同 entry 条目。"""
+    node = get_compiler("node")
+    cfg = {"manifest": "package.json"}
+    # true（默认）：SEA exe 作入口
+    assert [i.to_dict() for i in (node.deduce(cfg, "my-plugin") or [])] == [
+        {"value": "my-plugin.exe", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "node_modules", "kind": "dir", "derived": True}]
+    # false：bootstrap.py 作入口
+    assert [i.to_dict() for i in (node.deduce(
+        {**cfg, "self_contained": False}, "my-plugin") or [])] == [
+        {"value": "bootstrap.py", "kind": "file", "tags": ["entry"],
+         "derived": True},
+        {"value": "node_modules", "kind": "dir", "derived": True}]
+
+
+def test_node_compiler_bundle_validate(make_project):
+    """self_contained 字段接受 bool。"""
+    pm, _, plugin_dir = make_project()
+    (plugin_dir / "package.json").write_text(
+        json.dumps({"main": "main.js"}))
+    (plugin_dir / "main.js").write_text("x")
+    node = get_compiler("node")
+    assert node.validate({"manifest": "package.json",
+                          "self_contained": True}, plugin_dir) == []
+    assert node.validate({"manifest": "package.json",
+                          "self_contained": False}, plugin_dir) == []
+
+
+def test_resolve_packer_name_suffix(make_project, make_ctx):
+    """auto_suffix 开启时按产物模式追加后缀；关闭/缺省不加。"""
+    pm, b, plugin_dir = make_project()
+    b.set_packer_name("my-pack")
+    # 关闭（默认）：不变
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                      compile_cfg={"manifest": "package.json"})
+    assert resolve_packer_name(ctx, {}) == "my-pack"
+    # self_contained=True + auto_suffix → -self_contained
+    ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                       compile_cfg={"manifest": "package.json",
+                                    "self_contained": True,
+                                    "auto_suffix": True})
+    assert resolve_packer_name(ctx2, {}) == "my-pack-self_contained"
+    # self_contained=False + auto_suffix → -dependent
+    ctx3, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                       compile_cfg={"manifest": "package.json",
+                                    "self_contained": False,
+                                    "auto_suffix": True})
+    assert resolve_packer_name(ctx3, {}) == "my-pack-dependent"
+
+
+def test_resolve_run_command(tmp_path):
+    """调试运行命令解析：.py 入口经 Python 解释器执行，exe 直接执行。"""
+    py_entry = tmp_path / "bootstrap.py"
+    py_entry.write_text("x")
+    cmd = resolve_run_command(py_entry)
+    assert cmd[-1].endswith("bootstrap.py")
+    assert len(cmd) == 2  # [python, entry]
+    exe_entry = tmp_path / "plugin.exe"
+    exe_entry.write_text("x")
+    assert resolve_run_command(exe_entry) == [str(exe_entry)]
 
 
 # ---------------------------------------------------------------------------
@@ -199,30 +340,162 @@ def test_fill_builder_only_fills_empty(make_project, make_ctx):
     applied = fill_builder(ctx)
     assert applied and any("入口" in a for a in applied)
     assert b.entry_errors(plugin_dir) == []
-    # 编译产物条目：exe（入口）+ _internal/（derived）
+    # 编译产物条目：manifest.json（固定首位）+ exe（入口）+ _internal/（derived）
     items = b.items()
-    assert len(items) == 2
-    assert items[0].to_dict() == {"path": "testplugin.exe", "tags": ["entry"],
+    assert len(items) == 3
+    assert items[0].to_dict() == {"value": "manifest.json", "kind": "file",
+                                  "tags": ["manifest"], "derived": True}
+    assert items[1].to_dict() == {"value": "testplugin.exe", "kind": "file",
+                                  "tags": ["entry"], "derived": True}
+    assert items[2].to_dict() == {"value": "_internal", "kind": "dir",
                                   "derived": True}
-    assert items[1].to_dict() == {"dir": "_internal", "derived": True}
     # 再次 fill 不重复添加
     fill_builder(ctx)
-    assert len(b.items()) == 2
+    assert len(b.items()) == 3
     # 无编译 → 也清除旧 derived，返回清除提示（非 None）
     ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="")
     applied = fill_builder(ctx2)
     assert applied and any("已刷新" in a for a in applied)
-    assert len(b.items()) == 0  # derived 全清，用户条目无
+    assert len(b.items()) == 1  # derived 全清，只剩 manifest.json 固定声明
+
+
+def test_fill_builder_merges_deduced(make_project, make_ctx):
+    """fill 合并去重：入口由 deduced 承担（手动不再标 entry），补缺失的
+    编译产物目录（node_modules / dist / _internal）。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "package.json").write_text(
+        json.dumps({"main": "dist/main.js"}))
+    (plugin_dir / "dist").mkdir()
+    (plugin_dir / "dist" / "main.js").write_text("x")
+    # 用户手动文件（入口由 deduce 自动生成，手动 entry 不持久化）
+    b.add_file("my-entry.js")
+    pm.set_field("compiler", {"compile_system": "node",
+                              "manifest": "package.json"})
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="node",
+                      compile_cfg={"manifest": "package.json"})
+    applied = fill_builder(ctx)
+    items = b.items()
+    # deduced entry（默认自包含 exe）接管入口；手动文件保持普通
+    entries = [i for i in items if "entry" in i.tags]
+    assert len(entries) == 1 and entries[0].value == "testplugin.exe"
+    assert entries[0].derived
+    manual = [i for i in items if i.value == "my-entry.js"]
+    assert len(manual) == 1 and "entry" not in manual[0].tags
+    assert not manual[0].derived
+    # 缺失的 node_modules / dist 被补上
+    dirs = sorted(i.value for i in items if i.kind is ItemKind.DIR)
+    assert dirs == ["dist", "node_modules"]
+
+
+def test_sync_derived_rebuilds_on_mode_change(make_project, make_ctx):
+    """sync_derived：模式切换后旧 derived 条目（exe entry）按 deduce 重建。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        "[tool.dghub]\nentry='main.py'\n")
+    (plugin_dir / "main.py").write_text("x")
+    # 旧状态：自包含 deduced 视图（exe entry + _internal，内存不落盘）
+    b.set_deduced([
+        BuilderItem(value="tetris-py.exe", kind=ItemKind.FILE, tags=["entry"],
+                    derived=True),
+        BuilderItem(value="_internal", kind=ItemKind.DIR, derived=True),
+    ])
+    # 手动条目保留
+    b.add_file("notes.txt")
+    # 切到依赖版后 sync
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                      compile_cfg={"manifest": "pyproject.toml",
+                                   "self_contained": False})
+    sync_derived(ctx)
+    items = b.items()
+    def key(i):
+        return i.value
+    got = sorted((key(i), tuple(i.tags), i.derived) for i in items)
+    assert got == [
+        ("main.py", ("entry",), True),
+        ("manifest.json", ("manifest",), True),
+        ("notes.txt", (), False),
+        ("vendor", (), True),
+    ]
+    # 再切回自包含 → exe + _internal 恢复（依赖版 .py entry 被清）
+    ctx2, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                       compile_cfg={"manifest": "pyproject.toml",
+                                    "self_contained": True})
+    sync_derived(ctx2)
+    items = b.items()
+    got = sorted((key(i), tuple(i.tags), i.derived) for i in items)
+    assert got == [
+        ("_internal", (), True),
+        ("manifest.json", ("manifest",), True),
+        ("notes.txt", (), False),
+        (f"{plugin_dir.name}.exe", ("entry",), True),
+    ]
+
+
+def test_sync_derived_manual_file_coexists(make_project, make_ctx):
+    """手动文件与 deduced 同名（src/main.py）：入口由 deduced 承担
+    （依赖版入口即 [tool.dghub].entry 源码），手动条目保留普通。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        "[tool.dghub]\nentry='src/main.py'\n")
+    (plugin_dir / "src").mkdir()
+    (plugin_dir / "src" / "main.py").write_text("x")
+    # 用户手动文件（无 entry 标签——入口不再手动标记）
+    b.add_file("src/main.py")
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                      compile_cfg={"manifest": "pyproject.toml",
+                                   "self_contained": False})
+    sync_derived(ctx)
+    items = b.items()
+    # deduced 入口承担；手动同名条目保留为普通内容
+    entries = [i for i in items if "entry" in i.tags]
+    assert len(entries) == 1 and entries[0].value == "src/main.py"
+    assert entries[0].derived
+    manual = [i for i in items if i.value == "src/main.py" and not i.derived]
+    assert len(manual) == 1 and "entry" not in manual[0].tags
+    # vendor / 入口目录重建为 derived
+    vendor = [i for i in items if i.value == "vendor"]
+    assert len(vendor) == 1 and vendor[0].derived
+    src = [i for i in items if i.value == "src"]
+    assert len(src) == 1 and src[0].derived
+
+
+def test_sync_derived_deduced_entry_takes_over(make_project, make_ctx):
+    """手动普通文件（main.py ≠ deduced src/main.py）不影响 deduced 入口接管。"""
+    pm, b, plugin_dir = make_project()
+    (plugin_dir / "pyproject.toml").write_text(
+        "[tool.dghub]\nentry='src/main.py'\n")
+    (plugin_dir / "src").mkdir()
+    (plugin_dir / "src" / "main.py").write_text("x")
+    (plugin_dir / "main.py").write_text("x")
+    b.add_file("main.py")
+    ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="python",
+                      compile_cfg={"manifest": "pyproject.toml",
+                                   "self_contained": False})
+    sync_derived(ctx)
+    items = b.items()
+    entries = [i for i in items if "entry" in i.tags]
+    assert len(entries) == 1 and entries[0].value == "src/main.py"
+    assert entries[0].derived
+    # 手动 main.py 保留为普通内容
+    manual = [i for i in items if i.value == "main.py"]
+    assert len(manual) == 1 and "entry" not in manual[0].tags
+    assert not manual[0].derived
 
 
 def test_run_build_no_compile(make_project, make_ctx):
-    """无编译（纯收集）路径：entry 产物 + 资源 → zip。"""
+    """无编译（纯收集）路径：entry 产物 + 资源 → zip。
+
+    入口来自旧格式 project.json（tags: entry，迁移兼容——手动 entry
+    不再持久化，无编译项目入口只能由旧数据带入）。
+    """
     pm, b, plugin_dir = make_project()
     (plugin_dir / "main.py").write_text("print('hi')\n")
     (plugin_dir / "assets").mkdir()
     (plugin_dir / "assets" / "data.json").write_text("{}")
-    b.add_file("main.py", ["entry"])
-    b.add_dir("assets")
+    project = pm.read_project()
+    project["builder"]["files"] = [
+        {"path": "main.py", "tags": ["entry"]}, {"dir": "assets"}]
+    pm.write_project(project)
     ctx, _ = make_ctx(pm, b, plugin_dir )
     artifact = run_build(ctx, {"id": "t", "name": "t"})
     assert artifact is not None
@@ -242,7 +515,9 @@ def test_run_build_folder_override(make_project, make_ctx):
     """调试 folder 覆盖（内存，不落盘）：set_no_zip(True) → 目录产物。"""
     pm, b, plugin_dir = make_project()
     (plugin_dir / "main.exe").write_text("exe")
-    b.add_file("main.exe", ["entry"])
+    project = pm.read_project()
+    project["builder"]["files"] = [{"path": "main.exe", "tags": ["entry"]}]
+    pm.write_project(project)
     b.set_no_zip(True)
     ctx, _ = make_ctx(pm, b, plugin_dir )
     artifact = run_build(ctx, {"id": "t", "name": "t"})
@@ -256,7 +531,10 @@ def test_run_build_folder_override(make_project, make_ctx):
 def test_run_build_missing_entry_file(make_project, make_ctx):
     """无编译 + entry 条目缺失 → 收集阶段 BuildError（不再豁免）。"""
     pm, b, plugin_dir = make_project()
-    b.add_file("missing.exe", ["entry"])
+    project = pm.read_project()
+    project["builder"]["files"] = [{"path": "missing.exe",
+                                    "tags": ["entry"]}]
+    pm.write_project(project)
     ctx, _ = make_ctx(pm, b, plugin_dir )
     with pytest.raises(BuildError) as exc_info:
         run_build(ctx, {"id": "t", "name": "t"})
@@ -264,9 +542,16 @@ def test_run_build_missing_entry_file(make_project, make_ctx):
 
 
 def test_resolve_entry_exempt(make_project, make_ctx):
-    """resolve：有编译输入时 entry 缺失豁免；无编译时不豁免。"""
+    """resolve：有编译输入时 entry 缺失豁免；无编译时不豁免。
+
+    入口标签来自旧格式 project.json（迁移期——手动 entry 不再持久化，
+    豁免逻辑仅对迁移数据生效）。
+    """
     pm, b, plugin_dir = make_project()
-    b.add_file("missing.exe", ["entry"])
+    project = pm.read_project()
+    project["builder"]["files"] = [{"path": "missing.exe",
+                                    "tags": ["entry"]}]
+    pm.write_project(project)
     # 有编译输入（manifest）→ 豁免
     out = b.resolve(plugin_dir, entry_exempt=True)
     assert out == []
@@ -289,7 +574,11 @@ def test_run_build_command_compiler(make_project, make_ctx, tmp_path):
     pm.set_field("command", f"python {script.as_posix()}")
     (plugin_dir / "out").mkdir()
     (plugin_dir / "out" / "plugin.exe").write_bytes(b"exe")
-    b.add_file("out/plugin.exe", ["entry"])
+    # CommandCompiler 无 deduce（不生成入口）→ 入口由旧数据带入（迁移兼容）
+    project = pm.read_project()
+    project["builder"]["files"] = [{"path": "out/plugin.exe",
+                                    "tags": ["entry"]}]
+    pm.write_project(project)
     ctx, _ = make_ctx(pm, b, plugin_dir, compile_system="command",
                       compile_cfg={"command": f"python {script.as_posix()}",
                                    "compile_dir": ""})

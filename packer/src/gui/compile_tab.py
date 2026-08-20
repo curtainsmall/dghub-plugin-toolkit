@@ -5,19 +5,15 @@
 在编译内（backend.compilers），本页只做 UI 呈现与持久化。
 """
 
-import subprocess
-import threading
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Callable
 
 import customtkinter as ctk
 
-from backend.py_compiler import _get_python_exe
 from backend.compilers import COMPILERS, COMPILER_CHOICES, get_compiler
 from backend.project_manager import ProjectManager
-from backend.winflags import _NO_WINDOW
-from gui.widgets import ToolTip
+from gui.widgets import ToolTip, icon_font
 
 # 右栏各行统一的前导标签宽度（像素）
 _LABEL_W = 92
@@ -40,6 +36,7 @@ class CompileTab(ctk.CTkFrame):
         # 状态变量
         self._compile_system_var = ctk.StringVar(value="")
         self._manifest_var = ctk.StringVar(value="")
+        self._bundle_var = ctk.BooleanVar(value=True)  # True = 自包含（exe）
         self._compile_var = ctk.StringVar(value="")   # 编译命令字符串
         self._compile_dir = ""  # 执行目录（绝对路径；空 = 项目根）
 
@@ -72,26 +69,25 @@ class CompileTab(ctk.CTkFrame):
         ctk.CTkLabel(row, text="编译系统", width=_LABEL_W, anchor="w",
                      font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, padx=(0, 5), sticky="w")
+        selector_row = ctk.CTkFrame(row, fg_color="transparent")
+        selector_row.grid(row=0, column=1, sticky="w", padx=5)
         self._proc_menu = ctk.CTkOptionMenu(
-            row, width=220, values=[label for _, label in COMPILER_CHOICES],
+            selector_row, width=220,
+            values=[label for _, label in COMPILER_CHOICES],
             command=self._on_compile_changed)
-        self._proc_menu.grid(row=0, column=1, sticky="w", padx=5)
+        self._proc_menu.pack(side="left")
+        self._proc_hint_icon = ctk.CTkLabel(
+            selector_row, text="\uf059", width=24,
+            font=icon_font(), cursor="question_arrow")
+        self._proc_hint_icon.pack(side="left", padx=(6, 0))
         self._controls.append(self._proc_menu)
-        self._proc_hint = ctk.CTkLabel(
-            row, text="", font=ctk.CTkFont(size=11),
-            text_color=("gray40", "gray60"), anchor="w", wraplength=600,
-            justify="left")
-        self._proc_hint.grid(row=0, column=2, sticky="w", padx=(10, 0))
+        self._proc_hint_tip = ToolTip(self._proc_hint_icon,
+                                      self._compiler_hint_text())
 
         # ---- (None) 设置区（compile_system="" 时显示）----
         self._none_frame = ctk.CTkFrame(self, fg_color="transparent")
         self._none_frame.grid(row=1, column=0, columnspan=2, sticky="ew",
                               padx=10, pady=(10, 0))
-        ctk.CTkLabel(
-            self._none_frame, text="不执行编译：直接收集打包内容（构建页配置）",
-            font=ctk.CTkFont(size=13), text_color=("gray40", "gray60"),
-            anchor="w", wraplength=700, justify="left").pack(
-            anchor="w", padx=4, pady=8)
 
         # ---- Python 设置区（compile_system="python" 时显示）----
         self._py_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -103,21 +99,40 @@ class CompileTab(ctk.CTkFrame):
         ctk.CTkLabel(self._py_frame, text="依赖清单", width=_LABEL_W,
                      anchor="w", font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, padx=(0, 5), sticky="w")
+        manifest_row = ctk.CTkFrame(self._py_frame, fg_color="transparent")
+        manifest_row.grid(row=0, column=1, sticky="w", padx=5, pady=4)
         self._manifest_label = ctk.CTkLabel(
-            self._py_frame, text="未选择", anchor="w",
-            fg_color=("gray85", "gray25"), corner_radius=6, width=1)
-        self._manifest_label.grid(row=0, column=1, sticky="ew", padx=5, pady=4)
+            manifest_row, text="未选择", anchor="w",
+            fg_color=("gray85", "gray25"), corner_radius=6, width=220)
+        self._manifest_label.pack(side="left", padx=(0, 5))
         self._manifest_btn = ctk.CTkButton(
-            self._py_frame, text="选择文件", width=90,
+            manifest_row, text="选择文件", width=90,
             command=self._pick_manifest)
-        self._manifest_btn.grid(row=0, column=2, padx=(5, 0))
+        self._manifest_btn.pack(side="left")
         self._controls.extend([self._manifest_label, self._manifest_btn])
 
-
-        self._pyinstaller_hint = ctk.CTkLabel(
-            self._py_frame, text="", font=ctk.CTkFont(size=12),
-            text_color="gray", anchor="w")
-        self._pyinstaller_hint.grid(row=2, column=1, sticky="w", padx=5)
+        # 自包含模式（Node 专属：勾选 = 打包运行时，不勾选 = 依赖系统 Node）
+        self._bundle_frame = ctk.CTkFrame(self._py_frame, fg_color="transparent")
+        self._bundle_frame.grid(row=1, column=0, columnspan=3, sticky="ew",
+                                padx=(0, 0), pady=(8, 0))
+        self._bundle_frame.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self._bundle_frame, text="产物模式", width=_LABEL_W,
+                     anchor="w", font=ctk.CTkFont(weight="bold")).grid(
+            row=0, column=0, padx=(0, 5), sticky="w")
+        bundle_row = ctk.CTkFrame(self._bundle_frame, fg_color="transparent")
+        bundle_row.grid(row=0, column=1, sticky="w", padx=5)
+        self._bundle_var = ctk.BooleanVar(value=True)
+        self._bundle_check = ctk.CTkCheckBox(
+            bundle_row, text="自包含", variable=self._bundle_var,
+            command=self._on_bundle_toggled)
+        self._bundle_check.pack(side="left")
+        self._bundle_hint_icon = ctk.CTkLabel(
+            bundle_row, text="\uf059", width=24,
+            font=icon_font(), cursor="question_arrow")
+        self._bundle_hint_icon.pack(side="left", padx=(6, 0))
+        self._controls.append(self._bundle_check)
+        self._bundle_hint_tip = ToolTip(self._bundle_hint_icon, "")
+        self._bundle_frame.grid_remove()
 
         # ---- Command 设置区（compile_system="command" 时显示）----
         self._cmd_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -178,6 +193,16 @@ class CompileTab(ctk.CTkFrame):
                 return cid
         return ""
 
+    def _compiler_hint_text(self) -> str:
+        """编译系统 tooltip 静态文本：一次性说明全部选项（左对齐）。"""
+        lines: list[str] = []
+        for cid, label in COMPILER_CHOICES:
+            comp = COMPILERS.get(cid)
+            desc = (comp.description if comp
+                    else "不执行 compile，直接收集打包内容")
+            lines.append(f"{label}：{desc}")
+        return "\n".join(lines)
+
     def _on_compile_changed(self, label: str) -> None:
         if self._loading:
             return
@@ -188,7 +213,6 @@ class CompileTab(ctk.CTkFrame):
             section = dict(self._pm.get_field("compiler") or {})
             section["compile_system"] = self._compile_id()
             self._pm.set_field("compiler", section)
-        self._check_pyinstaller_bg()  # Python 选中时后台预检
         if self._on_changed:
             self._on_changed()
 
@@ -216,19 +240,31 @@ class CompileTab(ctk.CTkFrame):
         self._cmd_frame.grid_remove()
         self._none_frame.grid_remove()
         if cid in ("python", "node"):
-            # Node 与 Python 共用依赖清单区；Node 隐藏 SDK 与预检行
-            if cid == "node":
-                self._pyinstaller_hint.grid_remove()
-            else:
-                self._pyinstaller_hint.grid()
+            # Python 与 Node 共用依赖清单区与「自包含」模式区；
+            # PyInstaller 预检仅自包含 Python 显示（依赖版不需要）
+            self._bundle_frame.grid()
             self._py_frame.grid()
         elif cid == "command":
             self._cmd_frame.grid()
         else:
             self._none_frame.grid()
+        self._refresh_bundle_tip()
         comp = get_compiler(cid)
-        self._proc_hint.configure(
-            text=comp.description if comp else "不执行 compile，直接收集打包内容")
+
+    def _refresh_bundle_tip(self) -> None:
+        """产物模式 tooltip 随编译系统变化（Python：PyInstaller / Node：SEA）。"""
+        if self._compile_id() == "node":
+            text = ("开启：打包 Node.js 运行时（SEA 注入），"
+                    "目标机无需安装 Node\n"
+                    "关闭：不打包运行时，使用系统 Node.js；跳过 SEA 打包")
+        elif self._compile_id() == "python":
+            text = ("开启：打包 Python 运行时（PyInstaller onedir），"
+                    "目标机无需安装 Python\n"
+                    "关闭：不打包运行时，依赖系统 Python（uv 安装依赖到 "
+                    "vendor/，宿主自动注入导入路径）")
+        else:
+            text = ""
+        self._bundle_hint_tip.set_text(text)
 
     def _update_exec_state(self) -> None:
         """执行目录行始终可用——Command 区可见即 command 编译模式。"""
@@ -261,7 +297,11 @@ class CompileTab(ctk.CTkFrame):
             self._manifest_label.configure(
                 text=f"? {name} 未知清单", text_color=("#C0504D", "#E57373"))
         self._on_setting_changed()
-        self._check_pyinstaller_bg()
+
+    def _on_bundle_toggled(self) -> None:
+        """自包含 checkbox 变化 → 更新可见性并保存。"""
+        self._update_visibility()
+        self._on_setting_changed()
 
     def _pick_compile_dir(self) -> None:
         d = filedialog.askdirectory(title="选择编译命令执行目录")
@@ -291,30 +331,6 @@ class CompileTab(ctk.CTkFrame):
     # PyInstaller 预检（后台线程，仅标注不阻断）
     # ------------------------------------------------------------------
 
-    def _check_pyinstaller_bg(self) -> None:
-        if self._compile_id() != "python":
-            return
-        threading.Thread(target=self._check_pyinstaller_work,
-                         daemon=True).start()
-
-    def _check_pyinstaller_work(self) -> None:
-        try:
-            result = subprocess.run(
-                _get_python_exe() + ["-m", "PyInstaller", "--version"],
-                capture_output=True, text=True, timeout=30,
-                creationflags=_NO_WINDOW)
-            ok = result.returncode == 0
-        except Exception:
-            ok = False
-        text = ("PyInstaller installed" if ok
-                else "PyInstaller required")
-        color = ("#2E7D32" if ok else "#FF4444")
-        try:
-            self.after(0, lambda: self._pyinstaller_hint.configure(
-                text=text, text_color=color))
-        except Exception:
-            pass
-
     # ------------------------------------------------------------------
     # 持久化
     # ------------------------------------------------------------------
@@ -340,6 +356,7 @@ class CompileTab(ctk.CTkFrame):
                              COMPILER_CHOICES[0][1])
                 self._proc_menu.set(label)
                 self._manifest_var.set(project.get("compiler", {}).get("manifest", ""))
+                self._bundle_var.set(project.get("compiler", {}).get("self_contained", True))
                 self._compile_var.set(project.get("compiler", {}).get("command", ""))
                 rel_exec = project.get("compiler", {}).get("compile_dir", "")
                 self._compile_dir = (self._pm.to_absolute(rel_exec)
@@ -351,7 +368,6 @@ class CompileTab(ctk.CTkFrame):
                 self._loading = False
             self._update_visibility()
             self._update_exec_state()
-            self._check_pyinstaller_bg()
 
     def save_settings(self) -> None:
         """保存编译相关字段到 project.json 顶层。"""
@@ -362,6 +378,7 @@ class CompileTab(ctk.CTkFrame):
         compiler = project["compiler"]
         compiler["compile_system"] = self._compile_id()
         compiler["manifest"] = self._manifest_var.get()
+        compiler["self_contained"] = self._bundle_var.get()
         compiler["command"] = self._compile_var.get()
         compiler["compile_dir"] = (self._pm.to_relative(self._compile_dir)
                                  if self._compile_dir else "")
@@ -374,9 +391,11 @@ class CompileTab(ctk.CTkFrame):
         """供 BuildContext 组装的编译设置字段。"""
         cid = self._compile_id()
         if cid == "python":
-            return {"manifest": self._manifest_var.get()}
+            return {"manifest": self._manifest_var.get(),
+                    "self_contained": self._bundle_var.get()}
         if cid == "node":
-            return {"manifest": self._manifest_var.get()}
+            return {"manifest": self._manifest_var.get(),
+                    "self_contained": self._bundle_var.get()}
         if cid == "command":
             return {"command": self._compile_var.get(),
                     "compile_dir": self._compile_dir}

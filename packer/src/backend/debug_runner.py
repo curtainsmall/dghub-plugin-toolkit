@@ -44,6 +44,19 @@ def fetch_token(host: str = _DEFAULT_HOST, port: int = _DEFAULT_PORT,
         return None
 
 
+def resolve_run_command(entry: Path) -> list[str]:
+    """产物入口 → 可执行命令。
+
+    ``.py`` 入口（依赖版 bootstrap.py 等）Windows 无法直接 CreateProcess，
+    须经 Python 解释器执行（py_compiler._get_python_exe：源码态当前解释器 /
+    冻结态系统 Python）；其余（exe）直接执行。
+    """
+    if str(entry).lower().endswith(".py"):
+        from backend.py_compiler import _get_python_exe
+        return [*_get_python_exe(), str(entry)]
+    return [str(entry)]
+
+
 def run_process(cmd: list[str], cwd: Path, env: dict, logger: Logger,
                 source: str,
                 canceller: Canceller | None = None) -> int:
@@ -109,14 +122,12 @@ def build_for_debug(ctx, manifest_data: dict) -> Path | None:
 def locate_debug_entry(ctx, artifact: Path) -> Path | None:
     """产物文件夹内定位插件入口。
 
-    Python 编译 = ``<插件名>.exe``；其余编译系统 = 打包内容 entry 条目
-    （arc 相对插件根，落在产物文件夹内）。
+    入口 = entry 标签条目（arc 相对插件根，落在产物文件夹内）——
+    Python 自包含为 <插件名>.exe、依赖版为 [tool.dghub].entry 源码；
+    Node 自包含为 SEA exe、依赖版为 bootstrap.py。
     """
-    if ctx.compile_system == "python":
-        exe = artifact / f"{ctx.plugin_name}.exe"
-        return exe if exe.is_file() else None
     item = ctx.builder.entry_item()
-    if item is not None and item.path is not None:
-        p = artifact / item.path
+    if item is not None and item.value is not None:
+        p = artifact / item.value
         return p if p.exists() else None
     return None

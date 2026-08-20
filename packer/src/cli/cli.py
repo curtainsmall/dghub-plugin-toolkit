@@ -22,7 +22,7 @@ from backend.project_manager import (
 )
 
 try:
-    from backend._version import __version__
+    from backend._version import __version__  # type: ignore[reportMissingImports]
 except ImportError:  # 源码运行（_version.py 仅构建期生成）
     __version__ = "dev"
 
@@ -77,10 +77,18 @@ def _make_ctx(pm: ProjectManager, plugin_dir: str, logger: Logger,
         case "python":
             compile_cfg = {
                 "manifest": project.get("compiler", {}).get("manifest", ""),
+                "self_contained": project.get("compiler", {}).get(
+                    "self_contained", True),
+                "auto_suffix": project.get("compiler", {}).get(
+                    "auto_suffix", False),
             }
         case "node":
             compile_cfg = {
                 "manifest": project.get("compiler", {}).get("manifest", ""),
+                "self_contained": project.get("compiler", {}).get(
+                    "self_contained", True),
+                "auto_suffix": project.get("compiler", {}).get(
+                    "auto_suffix", False),
             }
         case "command":
             compile_cfg = {

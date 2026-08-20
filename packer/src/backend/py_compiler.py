@@ -212,32 +212,35 @@ def build_plugin_exe(
 
     # 依赖数据文件与元数据：.deps 所有顶层包逐一收集（litellm 等带数据
     # 文件的包；PyInstaller 默认只收 .py，数据文件须显式声明）
-    dep_pkgs, ns_pkgs = _scan_toplevel_packages(deps_dir)
-    for pkg in dep_pkgs:
-        cmd += ["--collect-data", pkg]
-        if any(deps_dir.glob(f"{pkg}-*.dist-info")):
-            cmd += ["--copy-metadata", pkg]
-    if dep_pkgs:
-        log.detail(f"依赖数据收集: {', '.join(dep_pkgs)}")
-
-    # 命名空间包（tiktoken_ext 等插件包）：整体复制源码目录——插件发现
-    # 机制依赖文件系统遍历（pkgutil.iter_modules），归档内的模块不可见
-    top_packages = set(dep_pkgs + ns_pkgs)
-    for pkg in ns_pkgs:
-        cmd += ["--add-data", f"{deps_dir / pkg};{pkg}"]
-        for mod in _scan_ns_hidden_imports(deps_dir, pkg, top_packages):
-            cmd += ["--hidden-import", mod]
-    if ns_pkgs:
-        log.detail(f"命名空间包复制: {', '.join(ns_pkgs)}")
-
-    # PyInstaller 子进程环境：.deps 注入 PYTHONPATH——spec 执行时
-    # collect_data_files / copy_metadata 需经 sys.path 定位依赖包
+    dep_pkgs: list[str] = []
+    ns_pkgs: list[str] = []
     build_env = None
-    if dep_pkgs:
-        prev = os.environ.get("PYTHONPATH", "")
-        build_env = {**os.environ,
-                     "PYTHONPATH": str(deps_dir.resolve())
-                     + (os.pathsep + prev if prev else "")}
+    if deps_dir is not None:
+        dep_pkgs, ns_pkgs = _scan_toplevel_packages(deps_dir)
+        for pkg in dep_pkgs:
+            cmd += ["--collect-data", pkg]
+            if any(deps_dir.glob(f"{pkg}-*.dist-info")):
+                cmd += ["--copy-metadata", pkg]
+        if dep_pkgs:
+            log.detail(f"依赖数据收集: {', '.join(dep_pkgs)}")
+
+        # 命名空间包（tiktoken_ext 等插件包）：整体复制源码目录——插件发现
+        # 机制依赖文件系统遍历（pkgutil.iter_modules），归档内的模块不可见
+        top_packages = set(dep_pkgs + ns_pkgs)
+        for pkg in ns_pkgs:
+            cmd += ["--add-data", f"{deps_dir / pkg};{pkg}"]
+            for mod in _scan_ns_hidden_imports(deps_dir, pkg, top_packages):
+                cmd += ["--hidden-import", mod]
+        if ns_pkgs:
+            log.detail(f"命名空间包复制: {', '.join(ns_pkgs)}")
+
+        # PyInstaller 子进程环境：.deps 注入 PYTHONPATH——spec 执行时
+        # collect_data_files / copy_metadata 需经 sys.path 定位依赖包
+        if dep_pkgs:
+            prev = os.environ.get("PYTHONPATH", "")
+            build_env = {**os.environ,
+                         "PYTHONPATH": str(deps_dir.resolve())
+                         + (os.pathsep + prev if prev else "")}
 
     # 项目根（散装单文件模块：`import utils` 命中 source_dir/utils.py）
     cmd += ["--paths", str(sdir)]

@@ -7,6 +7,113 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（Python）与 npm（TypeScript）。
 
+## [0.15.0] - 2026-08-20
+
+### 变更
+
+- **Packer**：BuilderItem 统一为 `value` + `kind`（`file` / `dir` /
+  `pattern` 枚举）——旧的 `path` / `dir` / `pattern` 三字段读取时自动
+  迁移；deduce / resolve / 管线 / 预览收集统一按 kind 分派
+- **Packer**：入口（entry）完全由编译系统 deduce 自动生成——移除打包
+  内容的手动入口标记（文件条目编辑对话框删除，列表仅保留删除操作；
+  `project.json` 不再保存 entry 标签，旧数据读取兼容、迁移期继续生效）
+- **Packer**：`manifest.json` 成为打包内容固定声明条目（视图首位，
+  黄色「清单」徽章）——预览树不再硬编码生成该节点，打包仍由
+  packaging 注入 zip/文件夹
+- **Packer**：Node.js 依赖版启动脚本 `start_node.py` 更名为
+  `bootstrap.py`（产物内 entry 文件名同步变更）
+- **Packer**：输出预览信息区移除（包名/大小/manifest 快照均可从构建页
+  与清单页查看）——预览树获得完整空间；树根 = `<包名>/`，缺失条目与
+  其他条目同排版、仅红色区分
+- **Packer**：分层配色重构——深灰全局背景 + 浅灰浮动卡片 + 列表凹陷区
+  + 斑马纹条目行；列表容器统一 FillScrollable
+
+### 新增
+
+- **Packer**：预览树颜色图例——「输出文件预览」标题旁 ⓘ 悬停气泡
+  （普通文件白 / 入口绿 / manifest 黄 / 尚未生成灰 / 缺失红，整行着色）
+- **Packer**：滚轮统一接管——单一全局回调按「最近滚动容器」调度，
+  滚动条局部绑定（修复内容区悬停不滚动与方向异常）
+
+### 修复
+
+- **Packer**：滚动条销毁竞态——Tcl 在 widget 销毁序列中仍回调
+  yscrollcommand，内部 canvas 已销毁时抛 `TclError`（切 tab / 关窗 /
+  重建列表触发）；`CTkScrollbar.set` 全局防御 + FillScrollable 销毁时
+  主动解绑回调链
+- **Packer**：`src/` 与 `src/main.py` 被拍平为两行的预览问题——derived
+  文件条目统一走路径树合成，目录声明去重
+- **Packer**：预览 0 文件（resolve 因缺失条目整体中止）——收集改为
+  逐条目求值
+- **Packer**：预览 Treeview 白色边框——样式统一为列表背景色
+- **Packer**：「按产物模式加后缀」未应用到正式构建——`resolve_packer_name`
+  消费的 `compile_cfg` 缺 `auto_suffix`（调试路径读取了、构建路径没读），
+  zip 包名无后缀而调试文件夹/预览树有；CLI 一并补读 `self_contained` +
+  `auto_suffix`（此前 CLI 依赖版项目误按自包含 deduce 且永不追加后缀）
+
+## [0.14.0] - 2026-08-17
+
+### 变更
+
+- **Packer**：产物模式字段从 `bundle: "exe"|"deps"` 统一为
+  `self_contained: true|false`（编译页改为复选框，勾选 = 自包含 /
+  不勾选 = 依赖版：运行时由宿主/系统提供）
+- **Packer**：Python 依赖版入口直接指向 `[tool.dghub].entry` 源码——
+  `manifest.entry` 为相对插件根的路径即可（非根目录合法），宿主对
+  `.py` 入口自动注入 `vendor/` 与入口目录导入路径（协议原生）
+- **Packer**：移除「调试源码」模式（调试页统一为「调试运行」——增量
+  缓存构建已足够快，deps 模式的调试同样必须走构建过程与产物结构）
+- **Packer**：fill_builder / sync_derived 的 deduce 合并去重并接管
+  入口语义——编译系统自持入口（exe / 启动器 / 源码），与 deduced
+  同名的手动 entry 尊重保留，异名降级为普通内容
+- **Packer**：编译产物条目（derived）不再持久化——总能从编译设置
+  推导，运行时注入视图；`project.json` 只保存手动打包内容（旧版
+  derived/auto 残留加载时自动清理）
+- **Packer**：GUI 术语中文化（复选框、占位符等 UI 文案统一为中文）
+- **Packer**：编译页合并进构建页——编译系统 / 依赖清单 / 产物模式
+  直接平铺在构建页（与包名、打包内容并列），「从编译填充」按钮移除：
+  编译设置变化或项目加载时自动重新填充 deduce 条目（幂等）
+- **Packer**：日志从独立 tab 移至全局底部面板（跨 tab 常驻、可折叠，
+  状态持久化）——拆分为「构建输出 / 调试输出」两个子视图，双 Logger
+  分流（构建管线 / 调试构建与运行）
+- **Packer**：「开始构建」按钮移入构建页右栏（预览下方），移除底部栏
+- **Packer**：线程安全 UI 调度（ui_dispatch）——Python 3.14 tkinter
+  禁止跨线程 Tcl 调用，后台构建/调试/检测线程的 UI 更新统一回主线程
+  执行（日志经队列、按钮/状态经调度、校验与配置收集留在主线程）
+- **Packer**：中间 tab 区域置于可滚动容器（日志面板展开压缩视口时编辑
+  内容仍可访问）；tab 高度按当前页面内容自适应（信息/设置等简单页面
+  不再被拉高留白）
+
+### 新增
+
+- **Packer**：构建页新增「按产物模式加后缀」复选框——开启后自动追加
+  `-self_contained` / `-dependent` 到包名（可自定义后缀文本）
+- **Packer**：设置页新增自包含/依赖版后缀输入框（占位符显示默认值，
+  留空回退默认）；实时联动构建预览
+- **Packer**：设置页整体移入滚动容器，相关链接移至底部，新增「打开配置
+  目录」按钮
+- **Packer**：构建页的包名输入框占位符动态显示默认包名
+  （插件目录名）
+
+### 修复
+
+- **Packer**：构建前 `sync_derived` 按当前 deduce 重建 derived 条目——
+  模式切换（self_contained）后旧条目（exe entry / 旧入口）不再残留，
+  手动条目保留
+- **Packer**：调试运行注入 `DGHUB_MANIFEST_DIR`（SDK manifest 定位约定）
+  与模拟宿主协议的 `PYTHONPATH`（入口目录 / 插件根 / `vendor/`）——
+  依赖版直跑源码入口不再缺依赖
+- **Packer**：调试 folder 发布前清空目标目录，不再残留旧构建文件
+- **Packer**：移除 GUI 的 PyInstaller 预检提示（编辑期后台检测）——
+  构建管线 `_check_pyinstaller` 已有等价且更完整的检测（报错含安装命令）
+- **Packer**：Python 编译的 `get_compile_cfg` 漏读 self_contained——
+  依赖版项目正式构建误走自包含（PyInstaller）分支
+- **Packer**：调试构建 `_make_debug_ctx` 漏读 self_contained 字段，
+  导致 deps 项目调试构建误走 exe 分支
+- **Packer**：编译设置变化时旧 deduced 条目残留——由构建前
+  `sync_derived` 重建取代（含自动填充，无需手动「从编译填充」）
+- **Packer**：复选框未绑定变量导致勾选不保存
+
 ## [0.13.1] - 2026-08-17
 
 ### 修复
