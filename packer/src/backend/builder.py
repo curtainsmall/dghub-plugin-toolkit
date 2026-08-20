@@ -117,7 +117,13 @@ class Builder:
                 if not d.get("derived") and "auto" not in d.get("tags", [])]
 
     def _save(self, files: list[BuilderItem]) -> None:
-        """落盘：derived / 废弃 auto 条目不持久化（仅手动条目）。"""
+        """落盘：derived / 废弃 auto 条目不持久化（仅手动条目）。
+
+        entry 标签由编译系统 deduce 自动生成（或旧数据迁移带入），
+        手动设置不持久化——project.json 不再保存入口标签。
+        """
+        for f in files:
+            f.tags = [t for t in f.tags if t != "entry"]
         self._pm.write_builder_files([
             f.to_dict() for f in files
             if not f.derived and "auto" not in f.tags])
@@ -174,7 +180,11 @@ class Builder:
             self._save(files)
 
     def set_tags(self, idx: int, tags: list[str]) -> None:
-        """贴/改标签（如标为 entry）——视图索引，manifest/deduced 只读。"""
+        """贴/改标签——视图索引，manifest/deduced 只读。
+
+        entry 标签不持久化（编译系统 deduce 自动生成，见 ``_save``）；
+        旧数据迁移期的手动 entry 由 fill_builder 的入口让位逻辑处理。
+        """
         files = self._files()
         mi = idx - 1 - len(self._deduced)
         if 0 <= mi < len(files):
