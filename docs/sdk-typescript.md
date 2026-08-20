@@ -235,7 +235,7 @@ TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存
      目标机无需安装 Node——临时生成 `sea-bootstrap.cjs` 引导器与
      `sea-config.packer.json` → `node --experimental-sea-config` 生成 blob →
      复制 `node.exe` → `postject` 注入 → 清理临时文件
-   - **依赖版（不勾选）**：跳过 SEA，生成 `start_node.py` 启动脚本
+   - **依赖版（不勾选）**：跳过 SEA，生成 `bootstrap.py` 启动脚本
      （~1KB，entry 指向它）——DGHub 以 `.py` 入口执行脚本（宿主自带
      Python 运行时），脚本拉起**系统 Node** 运行插件入口；目标机需
      预装 Node.js（framework-dependent）
@@ -271,12 +271,12 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 
 ```
 .node/<插件名>/
-├── start_node.py    # 启动脚本（.py 入口，Packer 生成）
+├── bootstrap.py    # 启动脚本（.py 入口，Packer 生成）
 ├── node_modules/    # 依赖（构建时 npm install 的全量拷贝）
 └── <入口目录>/      # 入口所在目录（入口在根则只收入口文件）
 ```
 
-`manifest.entry` 相应为 `<插件名>.exe`（自包含）或 `start_node.py`
+`manifest.entry` 相应为 `<插件名>.exe`（自包含）或 `bootstrap.py`
 （依赖版）——两者都是宿主已支持的 entry 类型。构建页「按产物模式加后缀」
 复选框开启时，包名自动追加 `-self_contained` 或 `-dependent` 后缀
 （可在设置页自定义后缀文本）。

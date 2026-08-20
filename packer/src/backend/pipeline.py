@@ -76,7 +76,7 @@ def fill_builder(ctx: BuildContext) -> list[str] | None:
             ctx.pm.set_field("compiler", section)
 
     # 2) deduce：编译产物条目 = 派生视图（不落盘，随时可重建）。
-    #    入口语义：编译系统自持（exe / start_node.py / 依赖版源码）——
+    #    入口语义：编译系统自持（exe / bootstrap.py / 依赖版源码）——
     #    与 deduced 不同名的旧 entry（含手动）降级为普通内容；同名
     #    （依赖版 entry 即 [tool.dghub].entry 源码路径）尊重现状，
     #    deduced 的 entry 条目跳过防重复；无编译（deduce 无 entry）

@@ -539,13 +539,13 @@ class NodeCompiler(Compiler):
         """manifest 已选 → 推导产物条目。
 
         self_contained=true（默认）：SEA exe + node_modules + 入口目录；
-        self_contained=false：启动脚本 start_node.py（.py 入口）+ 入口目录。
+        self_contained=false：启动脚本 bootstrap.py（.py 入口）+ 入口目录。
         """
         if not cfg.get("manifest") or not plugin_name:
             return None
         items: list[BuilderItem] = []
         if not cfg.get("self_contained", True):
-            items.append(BuilderItem(value="start_node.py", kind=ItemKind.FILE,
+            items.append(BuilderItem(value="bootstrap.py", kind=ItemKind.FILE,
                                      tags=["entry"], derived=True))
         else:
             items.append(BuilderItem(value=f"{plugin_name}.exe",
@@ -628,12 +628,12 @@ class NodeCompiler(Compiler):
         if not ctx.cfg.get("self_contained", True):
             # 依赖版：跳过 SEA，生成 .py 启动脚本作 entry（宿主以 .py 入口
             # 执行，用自带 Python 运行时拉起系统 Node）
-            launcher = prod_dir / "start_node.py"
+            launcher = prod_dir / "bootstrap.py"
             launcher.write_text(
                 _NODE_LAUNCHER.replace("{entry}",
                                        entry.replace(chr(92), "/")),
                 encoding="utf-8")
-            ctx.log.info("依赖版产物：生成 start_node.py 启动脚本"
+            ctx.log.info("依赖版产物：生成 bootstrap.py 启动脚本"
                          "（需目标机安装 Node.js）")
         else:
             # 4) 自包含：SEA 三件套（快照 → 复制 node.exe → postject 注入）

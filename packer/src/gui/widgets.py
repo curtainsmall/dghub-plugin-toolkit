@@ -85,6 +85,21 @@ def _ctk_mouse_wheel_disabled(self: Any, event: Any) -> None:
 
 ctk.CTkScrollableFrame._mouse_wheel_all = _ctk_mouse_wheel_disabled
 
+# scrollbar.set 的销毁竞态保护：Tcl 在 widget 销毁序列中（切 tab / 关窗 /
+# 列表重建）仍可能回调 canvas 的 yscrollcommand → set → 内部 canvas 已
+# 销毁 → TclError 直接冒出事件循环（此链不经我们的 try/except）。吞掉。
+_CTK_SCROLLBAR_SET = ctk.CTkScrollbar.set
+
+
+def _safe_scrollbar_set(self: Any, *args: Any) -> None:
+    try:
+        _CTK_SCROLLBAR_SET(self, *args)
+    except Exception:
+        pass
+
+
+setattr(ctk.CTkScrollbar, "set", _safe_scrollbar_set)
+
 _GLOBAL_WHEEL_BOUND = False
 
 
@@ -217,6 +232,20 @@ class FillScrollable(ctk.CTkFrame):
                 scrollregion=(0, 0, vw, max(ch, vh)))
         except Exception:
             pass
+
+    def destroy(self) -> None:
+        """销毁前解绑回调链：销毁序列中 Tcl 仍可能回调 yscrollcommand
+        （→ scrollbar 内部 canvas 已销毁 → TclError），先显式切断。"""
+        try:
+            self._canvas.configure(yscrollcommand="")
+        except Exception:
+            pass
+        try:
+            self.content.unbind("<Configure>")
+            self._canvas.unbind("<Configure>")
+        except Exception:
+            pass
+        super().destroy()
 
 
 class ToolTip:

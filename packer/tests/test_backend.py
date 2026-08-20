@@ -63,15 +63,15 @@ def test_builder_view_index_mapping(make_project):
     pm, b, _ = make_project()
     b.set_deduced([
         BuilderItem(value="node_modules", kind=ItemKind.DIR, derived=True),
-        BuilderItem(value="start_node.py", kind=ItemKind.FILE, tags=["entry"],
+        BuilderItem(value="bootstrap.py", kind=ItemKind.FILE, tags=["entry"],
                     derived=True),
     ])
     b.add_file("package-lock.json")           # 手动（存储 = 视图 manual 部分）
-    # 视图：manifest.json、node_modules、start_node.py、package-lock.json
+    # 视图：manifest.json、node_modules、bootstrap.py、package-lock.json
     view = b.items()
     assert view[0].value == "manifest.json" and "manifest" in view[0].tags
     assert view[1].value == "node_modules" and view[1].kind is ItemKind.DIR
-    assert view[2].value == "start_node.py"
+    assert view[2].value == "bootstrap.py"
     assert view[3].value == "package-lock.json"
     # 删除视图最后一项（package-lock.json）→ 只删它；manifest/deduced 不受影响
     b.remove_item(3)
@@ -79,12 +79,12 @@ def test_builder_view_index_mapping(make_project):
         {"value": "manifest.json", "kind": "file", "tags": ["manifest"],
          "derived": True},
         {"value": "node_modules", "kind": "dir", "derived": True},
-        {"value": "start_node.py", "kind": "file", "tags": ["entry"],
+        {"value": "bootstrap.py", "kind": "file", "tags": ["entry"],
          "derived": True}]
     # manifest/deduced 索引只读：对只读范围调用删除为 no-op
     b.remove_item(1)
     assert len(b.items()) == 3
-    # set_tags 视图索引：改 start_node.py（视图 2，deduced）为 no-op；
+    # set_tags 视图索引：改 bootstrap.py（视图 2，deduced）为 no-op；
     # 手动条目（只读区之后）可改
     b.set_tags(2, [])   # deduced 只读 → 标签不变
     assert "entry" in b.items()[2].tags
@@ -253,10 +253,10 @@ def test_node_compiler_bundle_deduce(make_project):
         {"value": "my-plugin.exe", "kind": "file", "tags": ["entry"],
          "derived": True},
         {"value": "node_modules", "kind": "dir", "derived": True}]
-    # false：start_node.py 作入口
+    # false：bootstrap.py 作入口
     assert [i.to_dict() for i in (node.deduce(
         {**cfg, "self_contained": False}, "my-plugin") or [])] == [
-        {"value": "start_node.py", "kind": "file", "tags": ["entry"],
+        {"value": "bootstrap.py", "kind": "file", "tags": ["entry"],
          "derived": True},
         {"value": "node_modules", "kind": "dir", "derived": True}]
 
@@ -298,10 +298,10 @@ def test_resolve_packer_name_suffix(make_project, make_ctx):
 
 def test_resolve_run_command(tmp_path):
     """调试运行命令解析：.py 入口经 Python 解释器执行，exe 直接执行。"""
-    py_entry = tmp_path / "start_node.py"
+    py_entry = tmp_path / "bootstrap.py"
     py_entry.write_text("x")
     cmd = resolve_run_command(py_entry)
-    assert cmd[-1].endswith("start_node.py")
+    assert cmd[-1].endswith("bootstrap.py")
     assert len(cmd) == 2  # [python, entry]
     exe_entry = tmp_path / "plugin.exe"
     exe_entry.write_text("x")

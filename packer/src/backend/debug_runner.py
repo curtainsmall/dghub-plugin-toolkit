@@ -47,7 +47,7 @@ def fetch_token(host: str = _DEFAULT_HOST, port: int = _DEFAULT_PORT,
 def resolve_run_command(entry: Path) -> list[str]:
     """产物入口 → 可执行命令。
 
-    ``.py`` 入口（依赖版 start_node.py 等）Windows 无法直接 CreateProcess，
+    ``.py`` 入口（依赖版 bootstrap.py 等）Windows 无法直接 CreateProcess，
     须经 Python 解释器执行（py_compiler._get_python_exe：源码态当前解释器 /
     冻结态系统 Python）；其余（exe）直接执行。
     """
@@ -124,7 +124,7 @@ def locate_debug_entry(ctx, artifact: Path) -> Path | None:
 
     入口 = entry 标签条目（arc 相对插件根，落在产物文件夹内）——
     Python 自包含为 <插件名>.exe、依赖版为 [tool.dghub].entry 源码；
-    Node 自包含为 SEA exe、依赖版为 start_node.py。
+    Node 自包含为 SEA exe、依赖版为 bootstrap.py。
     """
     item = ctx.builder.entry_item()
     if item is not None and item.value is not None:
