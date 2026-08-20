@@ -7,6 +7,46 @@
 版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（Python）与 npm（TypeScript）。
 
+## [0.15.0] - 2026-08-20
+
+### 变更
+
+- **Packer**：BuilderItem 统一为 `value` + `kind`（`file` / `dir` /
+  `pattern` 枚举）——旧的 `path` / `dir` / `pattern` 三字段读取时自动
+  迁移；deduce / resolve / 管线 / 预览收集统一按 kind 分派
+- **Packer**：入口（entry）完全由编译系统 deduce 自动生成——移除打包
+  内容的手动入口标记（文件条目编辑对话框删除，列表仅保留删除操作；
+  `project.json` 不再保存 entry 标签，旧数据读取兼容、迁移期继续生效）
+- **Packer**：`manifest.json` 成为打包内容固定声明条目（视图首位，
+  黄色「清单」徽章）——预览树不再硬编码生成该节点，打包仍由
+  packaging 注入 zip/文件夹
+- **Packer**：Node.js 依赖版启动脚本 `start_node.py` 更名为
+  `bootstrap.py`（产物内 entry 文件名同步变更）
+- **Packer**：输出预览信息区移除（包名/大小/manifest 快照均可从构建页
+  与清单页查看）——预览树获得完整空间；树根 = `<包名>/`，缺失条目与
+  其他条目同排版、仅红色区分
+- **Packer**：分层配色重构——深灰全局背景 + 浅灰浮动卡片 + 列表凹陷区
+  + 斑马纹条目行；列表容器统一 FillScrollable
+
+### 新增
+
+- **Packer**：预览树颜色图例——「输出文件预览」标题旁 ⓘ 悬停气泡
+  （普通文件白 / 入口绿 / manifest 黄 / 尚未生成灰 / 缺失红，整行着色）
+- **Packer**：滚轮统一接管——单一全局回调按「最近滚动容器」调度，
+  滚动条局部绑定（修复内容区悬停不滚动与方向异常）
+
+### 修复
+
+- **Packer**：滚动条销毁竞态——Tcl 在 widget 销毁序列中仍回调
+  yscrollcommand，内部 canvas 已销毁时抛 `TclError`（切 tab / 关窗 /
+  重建列表触发）；`CTkScrollbar.set` 全局防御 + FillScrollable 销毁时
+  主动解绑回调链
+- **Packer**：`src/` 与 `src/main.py` 被拍平为两行的预览问题——derived
+  文件条目统一走路径树合成，目录声明去重
+- **Packer**：预览 0 文件（resolve 因缺失条目整体中止）——收集改为
+  逐条目求值
+- **Packer**：预览 Treeview 白色边框——样式统一为列表背景色
+
 ## [0.14.0] - 2026-08-17
 
 ### 变更
