@@ -30,6 +30,8 @@
   下载临时目录、pyproject 包名、源码/docstring 文案
 - **Studio**：设置页「应用名称」显示、CLI `--version` 文案、
   GUI 窗口标题与更新提示同步新名
+- **仓库**：源码目录 `packer/` 更名为 `studio/`（CI 工作目录与产物
+  路径、README/CONTRIBUTING/.gitignore 同步）
 
 ## [0.15.0] - 2026-08-20
 
