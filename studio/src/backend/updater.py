@@ -50,7 +50,11 @@ def check_latest(timeout: float = 15.0) -> tuple[str | None, str | None, int]:
     """查询 GitHub 最新正式版。
 
     Returns:
-        (version, download_url, file_size_bytes)；任一失败返回 (None, None, 0)。
+        (version, download_url, file_size_bytes)。
+        - 网络/API 失败（超时、release 不存在）→ ``(None, None, 0)``
+        - 找到版本但附件名不匹配 ``ASSET_NAME``（如旧版 updater 查
+          新安装器名）→ ``(version, None, 0)``——调用方应提示手动
+          下载，而非误报网络错误
 
     优先走 Releases API；API 限速（403）时降级为跟随 releases/latest
     网页重定向提取版本号（size 未知返回 0，下载 URL 按固定格式构造）。

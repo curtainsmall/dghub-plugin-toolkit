@@ -7,6 +7,16 @@
 版本号为 toolkit 发布批次号，Studio 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（Python）与 npm（TypeScript）。
 
+## [0.16.2] - 2026-08-21
+
+### 修复
+
+- **Studio**：更新检查失败误报——更名后 release 附件为
+  `dghub-sdk-studio-setup.exe`，旧版 updater（内置旧附件名
+  `dghub-sdk-packer-setup.exe`）查无附件时显示「检查失败（网络
+  异常）」；现区分两种失败：网络/API 失败（请求超时）与附件缺失
+  （找到版本但无安装包——提示从 GitHub Releases 页手动下载）
+
 ## [0.16.1] - 2026-08-21
 
 ### 修复
