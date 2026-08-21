@@ -31,9 +31,7 @@ with dghub_sdk.Agent() as agent:
 
 ### TypeScript
 
-位于 `sdk/typescript/`。事件驱动 API——`Agent` 继承 `EventEmitter`，
-消息到达即触发 `AgentEvent.*` 事件，无需手动 `poll()`；构造参数
-`on*` 回调仍然可用（等价于事件注册）。
+位于 `sdk/typescript/`。
 
 ```bash
 npm install dghub-sdk
@@ -53,9 +51,9 @@ await agent.waitReady(10);   // 等待握手完成后再发送
 
 详细用法参见 [Python SDK 使用指南](docs/sdk-python.md) 与 [TypeScript SDK 使用指南](docs/sdk-typescript.md)。
 
-## Packer
+## Studio
 
-位于 `packer/`，图形化桌面应用，帮助开发者打包和分发 DGHub 插件（纯 GUI 工具）。
+位于 `studio/`，图形化桌面应用，帮助开发者打包和分发 DGHub 插件（纯 GUI 工具）。
 
 - 构建 — 编译（Python / Node.js (TypeScript) / 自定义命令 / 无）→ 打包；编译入口由项目清单声明，无需在 GUI 填写
 - 插件信息编辑 — 可视化填写元信息与 `config_schema`（分组/字段编辑器），产物 `manifest.json` 构建时自动生成
@@ -70,19 +68,19 @@ await agent.waitReady(10);   // 等待握手完成后再发送
 
 ### 下载
 
-从 [Releases](https://github.com/curtainsmall/dghub-sdk-toolkit/releases) 下载 `dghub-sdk-packer-setup.exe` 安装（每用户，无需管理员）。安装后：开始菜单「DGHub SDK Packer」启动 GUI；安装目录已入 PATH，CI 可用 `dgpacker-cli build`（只读构建，详见 [Packer CLI 文档](docs/packer-cli.md)）。
+从 [Releases](https://github.com/curtainsmall/dghub-sdk-toolkit/releases) 下载 `dghub-sdk-studio-setup.exe` 安装（每用户，无需管理员）。安装后：开始菜单「DGHub SDK Studio」启动 GUI；安装目录已入 PATH，CI 可用 `dgstudio-cli build`（只读构建，详见 [Studio CLI 文档](docs/packer-cli.md)）。旧版（DGHub SDK Packer）配置会在安装时自动迁移，并可选清理旧配置目录。
 
 ### 从源码运行
 
 ```bash
 # 安装依赖（需要 uv）
-uv sync --project packer
+uv sync --project studio
 
 # 运行 GUI
-uv run --project packer python packer/src/gui/main.py
+uv run --project studio python studio/src/gui/main.py
 
 # 构建 Windows 安装器（需 Inno Setup 6）
-uv run --project packer python packer/build.py
+uv run --project studio python studio/build.py
 ```
 
 ## Demo

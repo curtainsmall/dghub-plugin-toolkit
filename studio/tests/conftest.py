@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-# backend/gui 为 packer/src 下的顶层包，测试按 backend.* 导入后端
+# backend/gui 为 studio/src 下的顶层包，测试按 backend.* 导入后端
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from backend.builder import Builder  # noqa: E402

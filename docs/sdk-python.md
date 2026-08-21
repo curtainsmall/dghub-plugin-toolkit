@@ -13,7 +13,7 @@
 - [状态上报](#状态上报)
 - [错误处理](#错误处理)
 - [手动接入（调试）](#手动接入调试)
-- [附录：Packer 如何读取 Python 项目结构](#附录packer-如何读取-python-项目结构)
+- [附录：Studio 如何读取 Python 项目结构](#附录packer-如何读取-python-项目结构)
 
 ---
 
@@ -65,7 +65,7 @@ icon = dghub_sdk.plugin_root() / "assets" / "icon.png"   # 资源统一相对插
 ```
 
 `Agent.manifest_dir` 解析：显式传入（相对以调用方文件目录为基准）> 环境变量
-`DGHUB_MANIFEST_DIR`（Packer 调试注入）> 缺省 `plugin_root()`。手动运行源码且
+`DGHUB_MANIFEST_DIR`（Studio 调试注入）> 缺省 `plugin_root()`。手动运行源码且
 插件根无 manifest.json 时握手会报 `FileNotFoundError`（manifest 是构建产物）。
 
 ## 配置监听
@@ -184,17 +184,17 @@ python main.py
 
 或代码中临时 patch：`os.environ["DGHUB_HOST"] / ["DGHUB_PORT"] / ["DGHUB_TOKEN"]`。
 
-## 附录：Packer 如何读取 Python 项目结构
+## 附录：Studio 如何读取 Python 项目结构
 
-Packer 的 Python 编译系统（Python (uv + PyInstaller)）只从
+Studio 的 Python 编译系统（Python (uv + PyInstaller)）只从
 **`pyproject.toml`** 读取两个必需输入——依赖声明与 `[tool.dghub].entry`
-入口。其余打包定制（`.spec`、`[tool.pyinstaller]`）由 Packer 的固定产物
+入口。其余打包定制（`.spec`、`[tool.pyinstaller]`）由 Studio 的固定产物
 契约接管。
 
 ### 入口声明
 
 插件入口由 `pyproject.toml` 的 `[tool.dghub].entry` 声明（相对清单文件
-所在目录）。该声明仅供 Packer 使用（构建与调试时读取），SDK 运行时
+所在目录）。该声明仅供 Studio 使用（构建与调试时读取），SDK 运行时
 不需要：
 
 ```toml
@@ -205,7 +205,7 @@ entry = "src/main.py"
 依赖清单**仅接受 `pyproject.toml`**——`setup.py` / `setup.cfg` /
 `requirements*.txt` 无法声明入口，不被接受。
 
-### 构建流程（Packer 自动执行）
+### 构建流程（Studio 自动执行）
 
 **自包含（构建页「编译设置」的「自包含」复选框勾选，默认）**：
 
@@ -256,9 +256,9 @@ entry = "src/main.py"
 ### 插件作者须知
 
 - **为什么不使用项目的 `.spec` / `[tool.pyinstaller]`**：产物条目
-  （exe + `_internal/`）与产物位置由 Packer 固定（收集管线按此解析），
+  （exe + `_internal/`）与产物位置由 Studio 固定（收集管线按此解析），
   自由定制会破坏产物收集。PyInstaller 的配置优先级为 CLI > pyproject，
-  未被 Packer CLI 覆盖的字段（如 `icon`）可能隐式生效——无文档承诺，
+  未被 Studio CLI 覆盖的字段（如 `icon`）可能隐式生效——无文档承诺，
   **不建议依赖**（依赖版模式不涉及 PyInstaller）
 - 调试构建：构建产物后运行（增量缓存），依赖版即运行入口源码
 

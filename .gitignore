@@ -11,8 +11,8 @@
 # Source directories
 !.github/
 !.github/**
-!packer/
-!packer/**
+!studio/
+!studio/**
 !sdk/
 !sdk/**
 !demo/
@@ -21,9 +21,9 @@
 !docs/**
 
 # Re-ignore build outputs
-packer/bin/
-packer/installer/
-packer/src/backend/_version.py
+studio/bin/
+studio/installer/
+studio/src/backend/_version.py
 sdk/**/dist/
 sdk/**/node_modules/
 demo/**/vendor/

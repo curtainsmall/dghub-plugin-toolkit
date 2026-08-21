@@ -47,18 +47,28 @@
   uv run --extra test pytest
   ```
 
-- Packer（`packer/`）：使用 [uv](https://docs.astral.sh/uv/) 管理，
-  开发版启动：
+- SDK（`sdk/typescript/`）：Node.js 24+，测试经 `node --test`
+  （`npm test` 先构建再跑）：
 
   ```bash
-  uv sync --project packer
-  uv run --project packer python -m packer.src.main
+  cd sdk/typescript
+  npm install
+  npm test
+  ```
+
+- Studio（`studio/`）：使用 [uv](https://docs.astral.sh/uv/) 管理，
+  运行测试与开发版启动：
+
+  ```bash
+  cd studio
+  uv run --extra test pytest        # 逻辑层测试（backend/cli）
+  uv run --project studio python studio/src/gui/main.py   # 启动 GUI
   ```
 
 ## 提交约定
 
 - 提交信息建议使用 Conventional Commits 风格（如 `feat(sdk): ...`、
-  `fix(packer): ...`）
+  `fix(studio): ...`）
 - SDK 公共 API 的不兼容变更需在 PR 描述中明确标注，并同步更新
   `docs/` 下的相关文档与测试
-- 新功能请附带测试（`sdk/python/tests/`）
+- 新功能请附带测试（`sdk/python/tests/`、`sdk/typescript/tests/`、`studio/tests/`）

@@ -80,7 +80,7 @@ def test_version(capsys):
     with pytest.raises(SystemExit) as exc:
         dispatch(["--version"])
     assert exc.value.code == 0
-    assert "DGHub SDK Packer" in capsys.readouterr().out
+    assert "DGHub SDK Studio" in capsys.readouterr().out
 
 
 def test_build_no_color_position(tmp_path, capsys):

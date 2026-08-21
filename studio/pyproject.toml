@@ -1,7 +1,7 @@
 [project]
-name = "dghub-plugin-packer"
+name = "dghub-plugin-studio"
 version = "0.0.0"
-description = "DGHub SDK Packer — visual build tool for DGHub plugins"
+description = "DGHub SDK Studio — visual build tool for DGHub plugins"
 requires-python = ">=3.11"
 dependencies = [
     "customtkinter>=5.2.0",
