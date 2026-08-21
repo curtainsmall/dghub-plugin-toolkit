@@ -422,12 +422,23 @@ class SettingsTab(ctk.CTkFrame):
 
     def _on_check_done(self, latest: str | None, url: str | None,
                        size: int) -> None:
-        """检查结果落到 UI：已最新 / 发现新版 / 失败。"""
+        """检查结果落到 UI：已最新 / 发现新版 / 失败。
+
+        失败分两类：``latest is None`` = 网络/API 失败（请求超时或
+        release 不存在）；``url is None`` = 找到版本但附件名不匹配
+        （旧版 updater 查新附件名时缺失）——提示手动下载而非误报网络。
+        """
         self._update_btn.configure(state="normal", text="检查更新",
                                    command=self._on_check_update)
-        if not latest or not url:
+        if not latest:
             self._update_status.configure(text="检查失败（网络异常）",
                                           text_color="red")
+            return
+        if not url:
+            self._update_status.configure(
+                text=f"发现新版本 {latest}，但安装包缺失——"
+                     "请从 GitHub Releases 页手动下载",
+                text_color="red")
             return
         current = get_current_version()
         if not is_newer(latest, current):

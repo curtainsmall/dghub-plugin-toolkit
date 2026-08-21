@@ -59,6 +59,38 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \
     ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}'))
 
 [Code]
+// 旧版 AppId（DGHub SDK Packer，v0.16.0 之前）——用于注册表定位
+// 旧版真实安装位置（用户可能自定义过安装目录，不能只查默认路径）
+#define OLD_APP_ID "{A7C3E1F2-5B9D-4E8A-9C2F-1D3B6E4A8F70}"
+
+function GetOldInstallDir(): string;
+var
+  InstallDir: string;
+begin
+  Result := '';
+  if RegQueryStringValue(HKEY_CURRENT_USER,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#OLD_APP_ID}_is1',
+      'InstallLocation', InstallDir) then
+    Result := InstallDir;
+end;
+
+function GetOldUninstallPath(): string;
+var
+  Uninst: string;
+begin
+  Result := '';
+  if RegQueryStringValue(HKEY_CURRENT_USER,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#OLD_APP_ID}_is1',
+      'UninstallString', Uninst) then
+  begin
+    // UninstallString 形如 "C:\...\unins000.exe"（可能带引号）
+    Uninst := Trim(Uninst);
+    if (Length(Uninst) >= 2) and (Uninst[1] = '"') and (Uninst[Length(Uninst)] = '"') then
+      Uninst := Copy(Uninst, 2, Length(Uninst) - 2);
+    Result := Uninst;
+  end;
+end;
+
 function NeedsAddPath(Param: string): Boolean;
 var
   OrigPath: string;
@@ -107,7 +139,10 @@ begin
     Profile := GetEnv('USERPROFILE');
     OldConfigDir := Profile + '\.dghub-sdk-packer';       // 旧版配置目录
     NewConfigDir := Profile + '\.dghub-sdk-studio';       // 新版配置目录
-    OldInstallDir := GetEnv('LOCALAPPDATA') + '\dghub-sdk-packer';  // 旧版安装目录
+    // 旧版安装目录：优先注册表（覆盖自定义安装路径），回退默认路径
+    OldInstallDir := GetOldInstallDir();
+    if OldInstallDir = '' then
+      OldInstallDir := GetEnv('LOCALAPPDATA') + '\dghub-sdk-packer';
     // 1) 旧版配置迁移：仅当旧 state.json 存在且新配置尚未生成时复制（不覆盖）
     if FileExists(OldConfigDir + '\state.json') and not FileExists(NewConfigDir + '\state.json') then
     begin
@@ -120,7 +155,9 @@ begin
     begin
       Exec('taskkill.exe', '/IM dgpacker-gui.exe /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
       Exec('taskkill.exe', '/IM dgpacker-cli.exe /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      UninstPath := OldInstallDir + '\unins000.exe';
+      UninstPath := GetOldUninstallPath();
+      if UninstPath = '' then
+        UninstPath := OldInstallDir + '\unins000.exe';
       if FileExists(UninstPath) then
         Exec(UninstPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
       else
