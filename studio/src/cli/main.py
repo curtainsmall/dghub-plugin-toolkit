@@ -1,6 +1,6 @@
 """CLI 入口：dgstudio-cli（CI 专用只读构建）。
 
-从 packer/src 运行：
+从 studio/src 运行：
 
     python -m cli.main build [目录]
 

@@ -5,7 +5,7 @@ Usage:
     # 或 uv: uv run build.py --version 0.4.0
 
 流程：注入版本 → PyInstaller(packer.spec) 出 onedir → ISCC 编译安装器。
-产物：packer/installer/dghub-sdk-studio-setup.exe（onedir bin/ 为中间物）。
+产物：studio/installer/dghub-sdk-studio-setup.exe（onedir bin/ 为中间物）。
 前置：本机需装 Inno Setup 6（ISCC 在 PATH 或默认安装目录）。
 """
 
@@ -133,7 +133,7 @@ def _build_onedir() -> int:
 
 
 def _build_installer(version: str) -> int:
-    """ISCC 编译 installer.iss → packer/installer/dghub-sdk-studio-setup.exe。"""
+    """ISCC 编译 installer.iss → studio/installer/dghub-sdk-studio-setup.exe。"""
     iscc = _find_iscc()
     if not iscc:
         print("\nError: ISCC.exe (Inno Setup 6) not found.")

@@ -31,7 +31,7 @@ jobs:
         run: python -m pytest -q
         working-directory: sdk/python
 
-  test-packer:
+  test-studio:
     runs-on: windows-latest
 
     steps:
@@ -46,6 +46,6 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Run Packer logic tests
+      - name: Run Studio logic tests
         run: uv run --extra test pytest -q
-        working-directory: packer
+        working-directory: studio

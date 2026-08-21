@@ -45,7 +45,7 @@ jobs:
             echo "sdk_ts=true" >> "$GITHUB_OUTPUT"
           fi
 
-  build-packer:
+  build-studio:
     runs-on: windows-latest
 
     steps:
@@ -63,7 +63,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync
-        working-directory: packer
+        working-directory: studio
 
       - name: Install Inno Setup
         shell: pwsh
@@ -92,13 +92,13 @@ jobs:
           uv run build.py
         env:
           CI_VERSION_TAG: ${{ github.ref_name }}
-        working-directory: packer
+        working-directory: studio
 
       - name: Upload installer as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: DGHubSDKStudio-${{ github.ref_name }}
-          path: packer/installer/dghub-sdk-studio-setup.exe
+          path: studio/installer/dghub-sdk-studio-setup.exe
 
   build-sdk-py:
     needs: detect-changes
@@ -170,8 +170,8 @@ jobs:
             sdk/typescript/README.md
 
   release:
-    needs: [detect-changes, build-packer, build-sdk-py, build-sdk-ts]
-    if: always() && needs.build-packer.result == 'success' && needs.build-sdk-py.result == 'success' && needs.build-sdk-ts.result == 'success' && needs.detect-changes.result == 'success'
+    needs: [detect-changes, build-studio, build-sdk-py, build-sdk-ts]
+    if: always() && needs.build-studio.result == 'success' && needs.build-sdk-py.result == 'success' && needs.build-sdk-ts.result == 'success' && needs.detect-changes.result == 'success'
     runs-on: ubuntu-latest
 
     steps:

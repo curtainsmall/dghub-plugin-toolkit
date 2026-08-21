@@ -11,7 +11,7 @@
 
 from pathlib import Path
 
-ROOT = Path(SPECPATH)                     # packer/
+ROOT = Path(SPECPATH)                     # studio/
 SRC = ROOT / "src"
 SDK = ROOT.parent / "sdk" / "python"
 

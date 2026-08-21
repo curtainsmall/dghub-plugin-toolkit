@@ -55,7 +55,7 @@ await agent.waitReady(10);   // 等待握手完成后再发送
 
 ## Studio
 
-位于 `packer/`，图形化桌面应用，帮助开发者打包和分发 DGHub 插件（纯 GUI 工具）。
+位于 `studio/`，图形化桌面应用，帮助开发者打包和分发 DGHub 插件（纯 GUI 工具）。
 
 - 构建 — 编译（Python / Node.js (TypeScript) / 自定义命令 / 无）→ 打包；编译入口由项目清单声明，无需在 GUI 填写
 - 插件信息编辑 — 可视化填写元信息与 `config_schema`（分组/字段编辑器），产物 `manifest.json` 构建时自动生成
@@ -76,13 +76,13 @@ await agent.waitReady(10);   // 等待握手完成后再发送
 
 ```bash
 # 安装依赖（需要 uv）
-uv sync --project packer
+uv sync --project studio
 
 # 运行 GUI
-uv run --project packer python packer/src/gui/main.py
+uv run --project studio python studio/src/gui/main.py
 
 # 构建 Windows 安装器（需 Inno Setup 6）
-uv run --project packer python packer/build.py
+uv run --project studio python studio/build.py
 ```
 
 ## Demo
