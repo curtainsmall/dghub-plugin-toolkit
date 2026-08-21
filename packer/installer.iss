@@ -1,28 +1,30 @@
-; DGHub SDK Packer — Inno Setup 安装脚本（每用户安装）
+; DGHub SDK Studio — Inno Setup 安装脚本（每用户安装）
 ; 由 build.py 调用：ISCC installer.iss /DMyVersion=<x.y.z>
-; 打包 onedir（bin\dghub-sdk-packer\）为安装器，装到 LocalAppData 并将安装目录加入用户 PATH。
-; GUI = dgpacker-gui.exe（开始菜单）；CI CLI = dgpacker-cli.exe（PATH 命令 `dgpacker-cli build`）。
+; 打包 onedir（bin\dghub-sdk-studio\）为安装器，装到 LocalAppData 并将安装目录加入用户 PATH。
+; GUI = dgstudio-gui.exe（开始菜单）；CI CLI = dgstudio-cli.exe（PATH 命令 `dgstudio-cli build`）。
+; 旧版（DGHub SDK Packer）存在时：自动迁移 state.json 到新配置目录、静默卸载
+; 旧版安装并清理旧配置（安装后只保留 Studio）。
 
 #ifndef MyVersion
   #define MyVersion "0.0.0"
 #endif
 
-#define MyAppName "DGHub SDK Packer"
-#define MyGuiExe "dgpacker-gui.exe"
-#define MyCliExe "dgpacker-cli.exe"
+#define MyAppName "DGHub SDK Studio"
+#define MyGuiExe "dgstudio-gui.exe"
+#define MyCliExe "dgstudio-cli.exe"
 
 [Setup]
-AppId={{A7C3E1F2-5B9D-4E8A-9C2F-1D3B6E4A8F70}
+AppId={{B9E5C2A1-4D6F-4E8B-9A3C-7F1D2E5B8A04}
 AppName={#MyAppName}
 AppVersion={#MyVersion}
 AppPublisher=DGHub
-DefaultDirName={localappdata}\dghub-sdk-packer
+DefaultDirName={localappdata}\dghub-sdk-studio
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ChangesEnvironment=yes
 OutputDir=installer
-OutputBaseFilename=dghub-sdk-packer-setup
+OutputBaseFilename=dghub-sdk-studio-setup
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyGuiExe}
 WizardStyle=modern
@@ -39,20 +41,20 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; onedir 全部内容（两个 exe + 共享 _internal/）
-Source: "bin\dghub-sdk-packer\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "bin\dghub-sdk-studio\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-; 开始菜单只放 GUI；CLI(dgpacker-cli.exe) 通过 PATH 使用，无需快捷方式
+; 开始菜单只放 GUI；CLI(dgstudio-cli.exe) 通过 PATH 使用，无需快捷方式
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyGuiExe}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyGuiExe}"; Tasks: desktopicon
 
 [Run]
-; 「启动 Packer」复选框（默认勾选——安装完成即启动）；静默安装跳过
+; 「启动 Studio」复选框（默认勾选——安装完成即启动）；静默安装跳过
 Filename: "{app}\{#MyGuiExe}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
-; 将安装目录加入用户 PATH（使 dgpacker-cli 全局可用）；ChangesEnvironment=yes 会广播 WM_SETTINGCHANGE
+; 将安装目录加入用户 PATH（使 dgstudio-cli 全局可用）；ChangesEnvironment=yes 会广播 WM_SETTINGCHANGE
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \
     ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}'))
 
@@ -88,6 +90,45 @@ begin
     else
       Delete(OrigPath, P, Length(Param));
     RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath);
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Profile: string;
+  OldConfigDir: string;
+  NewConfigDir: string;
+  OldInstallDir: string;
+  UninstPath: string;
+  ResultCode: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    Profile := GetEnv('USERPROFILE');
+    OldConfigDir := Profile + '\.dghub-sdk-packer';       // 旧版配置目录
+    NewConfigDir := Profile + '\.dghub-sdk-studio';       // 新版配置目录
+    OldInstallDir := GetEnv('LOCALAPPDATA') + '\dghub-sdk-packer';  // 旧版安装目录
+    // 1) 旧版配置迁移：仅当旧 state.json 存在且新配置尚未生成时复制（不覆盖）
+    if FileExists(OldConfigDir + '\state.json') and not FileExists(NewConfigDir + '\state.json') then
+    begin
+      CreateDir(NewConfigDir);
+      FileCopy(OldConfigDir + '\state.json', NewConfigDir + '\state.json', False);
+    end;
+    // 2) 自动卸载旧版 Packer（静默）：先终止残留进程，再运行其卸载器；
+    //    卸载器缺失（目录残留）时直接删除安装目录——安装后只保留 Studio
+    if DirExists(OldInstallDir) then
+    begin
+      Exec('taskkill.exe', '/IM dgpacker-gui.exe /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Exec('taskkill.exe', '/IM dgpacker-cli.exe /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      UninstPath := OldInstallDir + '\unins000.exe';
+      if FileExists(UninstPath) then
+        Exec(UninstPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+      else
+        DelTree(OldInstallDir, True, True, False);
+    end;
+    // 3) 清理旧配置目录：迁移已完成（步骤 1），旧配置不再需要
+    if DirExists(OldConfigDir) then
+      DelTree(OldConfigDir, True, True, False);
   end;
 end;
 

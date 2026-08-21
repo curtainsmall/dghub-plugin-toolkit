@@ -1,8 +1,8 @@
-"""DGHub SDK Packer — GUI 入口。
+"""DGHub SDK Studio — GUI 入口。
 
 用法：
     python -m gui.main            # 从 packer/src 运行
-    # 或 PyInstaller 构建后：DGHubPluginPacker.exe（windowed）
+    # 或 PyInstaller 构建后：dgstudio-gui.exe（windowed）
 """
 
 from pathlib import Path

@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller 构建配方：onedir + MERGE，GUI 与 CI CLI 共享一份运行时。
 
-产出单个文件夹 `dghub-sdk-packer/`，含两个启动器：
-  - `dgpacker-gui.exe`（windowed，GUI；开始菜单入口）
-  - `dgpacker-cli.exe`（console，CI 专用只读构建：`dgpacker-cli build`）
+产出单个文件夹 `dghub-sdk-studio/`，含两个启动器：
+  - `dgstudio-gui.exe`（windowed，GUI；开始菜单入口）
+  - `dgstudio-cli.exe`（console，CI 专用只读构建：`dgstudio-cli build`）
 与共享的 `_internal/`（Python 运行时、后端、SDK 数据等只存一份）。
 
 由 `build.py` 调用；版本号经 `src/backend/_version.py`（构建期生成）注入。
@@ -62,8 +62,8 @@ a_cli = Analysis(
 
 # 共享公共依赖：后出现的 CLI 引用 GUI 已收集的运行时/后端
 MERGE(
-    (a_gui, "dgpacker-gui", "dgpacker-gui"),
-    (a_cli, "dgpacker-cli", "dgpacker-cli"),
+    (a_gui, "dgstudio-gui", "dgstudio-gui"),
+    (a_cli, "dgstudio-cli", "dgstudio-cli"),
 )
 
 pyz_gui = PYZ(a_gui.pure)
@@ -72,7 +72,7 @@ exe_gui = EXE(
     a_gui.scripts,
     [],
     exclude_binaries=True,
-    name="dgpacker-gui",
+    name="dgstudio-gui",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -91,7 +91,7 @@ exe_cli = EXE(
     a_cli.scripts,
     [],
     exclude_binaries=True,
-    name="dgpacker-cli",
+    name="dgstudio-cli",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -115,5 +115,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="dghub-sdk-packer",
+    name="dghub-sdk-studio",
 )

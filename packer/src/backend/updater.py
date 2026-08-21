@@ -13,7 +13,7 @@ from pathlib import Path
 from backend import settings_store
 
 GITHUB_REPO = "curtainsmall/dghub-sdk-toolkit"
-ASSET_NAME = "dghub-sdk-packer-setup.exe"
+ASSET_NAME = "dghub-sdk-studio-setup.exe"
 _CHUNK = 128 * 1024  # 进度回调粒度：每 128KB 一次
 
 
@@ -58,7 +58,7 @@ def check_latest(timeout: float = 15.0) -> tuple[str | None, str | None, int]:
     try:
         req = urllib.request.Request(
             f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
-            headers={"User-Agent": "dghub-sdk-packer-updater",
+            headers={"User-Agent": "dghub-sdk-studio-updater",
                      "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -77,7 +77,7 @@ def check_latest(timeout: float = 15.0) -> tuple[str | None, str | None, int]:
     try:
         req = urllib.request.Request(
             f"https://github.com/{GITHUB_REPO}/releases/latest",
-            headers={"User-Agent": "dghub-sdk-packer-updater"})
+            headers={"User-Agent": "dghub-sdk-studio-updater"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             final = resp.geturl()
         tag = final.rstrip("/").rsplit("/", 1)[-1]
@@ -93,13 +93,13 @@ def check_latest(timeout: float = 15.0) -> tuple[str | None, str | None, int]:
 
 def update_dest(version: str) -> Path:
     """下载目标路径：临时目录下按版本命名（重试时覆盖）。"""
-    return Path(tempfile.gettempdir()) / "dghub-packer-update" / \
+    return Path(tempfile.gettempdir()) / "dghub-studio-update" / \
         f"setup-{version}.exe"
 
 
 def cleanup_stale_installers(keep_version: str) -> None:
     """删除临时目录中其他版本的 installer，仅保留当前版本。"""
-    d = Path(tempfile.gettempdir()) / "dghub-packer-update"
+    d = Path(tempfile.gettempdir()) / "dghub-studio-update"
     if not d.is_dir():
         return
     keep = f"setup-{keep_version}.exe"

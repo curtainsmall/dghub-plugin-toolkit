@@ -4,8 +4,32 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
-版本号为 toolkit 发布批次号，Packer 与 SDK 统一使用；SDK 仅在自身有变更
+版本号为 toolkit 发布批次号，Studio 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（Python）与 npm（TypeScript）。
+
+## [0.16.0] - 2026-08-20
+
+### ⚠️ 破坏性变更
+
+- **Studio**：应用更名为 **DGHub SDK Studio**（原 DGHub SDK Packer）——
+  安装目录 `%LocalAppData%\dghub-sdk-studio`、安装器
+  `dghub-sdk-studio-setup.exe`、exe `dgstudio-gui.exe` /
+  `dgstudio-cli.exe`（PATH 命令 `dgstudio-cli build`，CI 脚本需同步
+  改名）、新 AppId（与旧版互不覆盖）
+- **Studio**：安装器检测到旧版 Packer 时**自动静默卸载**（终止残留
+  进程 → 运行旧版卸载器；卸载器缺失则直接删除安装目录）——安装后
+  只保留 Studio
+- **Studio**：全局配置目录迁移至 `~/.dghub-sdk-studio`——由**安装器**
+  完成：检测旧版 `~/.dghub-sdk-packer/state.json` 时自动复制到新目录
+  （不覆盖已有新配置），迁移后随卸载流程一并删除旧配置目录；
+  应用侧不感知旧目录
+
+### 变更
+
+- **Studio**：内部更名——GitHub 更新检测的安装包文件名与 User-Agent、
+  下载临时目录、pyproject 包名、源码/docstring 文案
+- **Studio**：设置页「应用名称」显示、CLI `--version` 文案、
+  GUI 窗口标题与更新提示同步新名
 
 ## [0.15.0] - 2026-08-20
 

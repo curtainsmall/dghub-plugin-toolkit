@@ -36,9 +36,9 @@ from backend import settings_store
 
 
 class App(ctk.CTk):
-    """DGHub SDK Packer main window."""
+    """DGHub SDK Studio main window."""
 
-    TITLE = "DGHub SDK Packer"
+    TITLE = "DGHub SDK Studio"
     WINDOW_SIZE = "1400x1100"
 
     def __init__(self) -> None:
@@ -620,9 +620,9 @@ class App(ctk.CTk):
         dialog.grab_set()
 
         text = (
-            f"发现 DGHub SDK Packer {latest}，安装包已下载，是否安装？"
+            f"发现 DGHub SDK Studio {latest}，安装包已下载，是否安装？"
             if has_installer
-            else f"发现 DGHub SDK Packer {latest}，是否下载？"
+            else f"发现 DGHub SDK Studio {latest}，是否下载？"
         )
         ctk.CTkLabel(
             dialog, text=text, font=ctk.CTkFont(size=14), wraplength=380, justify="left"

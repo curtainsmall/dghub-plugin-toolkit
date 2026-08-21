@@ -1,11 +1,11 @@
-"""Build DGHub SDK Packer: 源码 → onedir → Inno Setup 安装器（一步到位）。
+"""Build DGHub SDK Studio: 源码 → onedir → Inno Setup 安装器（一步到位）。
 
 Usage:
     python build.py [--version X.Y.Z]
     # 或 uv: uv run build.py --version 0.4.0
 
 流程：注入版本 → PyInstaller(packer.spec) 出 onedir → ISCC 编译安装器。
-产物：packer/installer/dghub-sdk-packer-setup.exe（onedir bin/ 为中间物）。
+产物：packer/installer/dghub-sdk-studio-setup.exe（onedir bin/ 为中间物）。
 前置：本机需装 Inno Setup 6（ISCC 在 PATH 或默认安装目录）。
 """
 
@@ -25,7 +25,7 @@ TAG_PREFIX = "v"
 _VERSION_PATH = ROOT / "src" / "backend" / "_version.py"
 _SPEC = ROOT / "packer.spec"
 _ISS = ROOT / "installer.iss"
-_ONEDIR = ROOT / "bin" / "dghub-sdk-packer"
+_ONEDIR = ROOT / "bin" / "dghub-sdk-studio"
 
 _SEMVER_RE = re.compile(
     r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$"
@@ -33,7 +33,7 @@ _SEMVER_RE = re.compile(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build DGHub SDK Packer installer")
+    parser = argparse.ArgumentParser(description="Build DGHub SDK Studio installer")
     parser.add_argument(
         "--version", default="", metavar="X.Y.Z",
         help="强制指定构建版本号（SemVer），跳过 git tag 读取",
@@ -107,12 +107,12 @@ def main() -> int:
     finally:
         _reset_version()
         _clean(ROOT / "cache")
-    print(f"\nDone. Installer: {(_ISS.parent / 'installer' / 'dghub-sdk-packer-setup.exe')}")
+    print(f"\nDone. Installer: {(_ISS.parent / 'installer' / 'dghub-sdk-studio-setup.exe')}")
     return 0
 
 
 def _build_onedir() -> int:
-    """PyInstaller 按 packer.spec 产出 onedir（bin/dghub-sdk-packer/）。"""
+    """PyInstaller 按 packer.spec 产出 onedir（bin/dghub-sdk-studio/）。"""
     print("Building onedir bundle with PyInstaller (packer.spec)...")
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -133,7 +133,7 @@ def _build_onedir() -> int:
 
 
 def _build_installer(version: str) -> int:
-    """ISCC 编译 installer.iss → packer/installer/dghub-sdk-packer-setup.exe。"""
+    """ISCC 编译 installer.iss → packer/installer/dghub-sdk-studio-setup.exe。"""
     iscc = _find_iscc()
     if not iscc:
         print("\nError: ISCC.exe (Inno Setup 6) not found.")

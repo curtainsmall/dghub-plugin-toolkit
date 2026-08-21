@@ -1,4 +1,4 @@
-﻿name: Build and Release
+name: Build and Release
 
 on:
   push:
@@ -97,8 +97,8 @@ jobs:
       - name: Upload installer as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DGHubSDKPacker-${{ github.ref_name }}
-          path: packer/installer/dghub-sdk-packer-setup.exe
+          name: DGHubSDKStudio-${{ github.ref_name }}
+          path: packer/installer/dghub-sdk-studio-setup.exe
 
   build-sdk-py:
     needs: detect-changes

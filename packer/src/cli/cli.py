@@ -154,13 +154,13 @@ def dispatch(argv: list[str]) -> int:
     g.add_argument("--no-color", action="store_true",
                    help="禁用 ANSI 着色（CI 日志）")
     parser = argparse.ArgumentParser(
-        prog="dgpacker-cli",
-        description="DGHub SDK Packer CI 构建：读 .dghub-sdk/ 构建插件"
+        prog="dgstudio-cli",
+        description="DGHub SDK Studio CI 构建：读 .dghub-sdk/ 构建插件"
                     "（只读配置，无配置命令）",
     )
     parser.add_argument(
         "--version", action="version",
-        version=f"DGHub SDK Packer {__version__}",
+        version=f"DGHub SDK Studio {__version__}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     p_build = sub.add_parser("build", parents=[g],

@@ -53,7 +53,7 @@ await agent.waitReady(10);   // 等待握手完成后再发送
 
 详细用法参见 [Python SDK 使用指南](docs/sdk-python.md) 与 [TypeScript SDK 使用指南](docs/sdk-typescript.md)。
 
-## Packer
+## Studio
 
 位于 `packer/`，图形化桌面应用，帮助开发者打包和分发 DGHub 插件（纯 GUI 工具）。
 
@@ -70,7 +70,7 @@ await agent.waitReady(10);   // 等待握手完成后再发送
 
 ### 下载
 
-从 [Releases](https://github.com/curtainsmall/dghub-sdk-toolkit/releases) 下载 `dghub-sdk-packer-setup.exe` 安装（每用户，无需管理员）。安装后：开始菜单「DGHub SDK Packer」启动 GUI；安装目录已入 PATH，CI 可用 `dgpacker-cli build`（只读构建，详见 [Packer CLI 文档](docs/packer-cli.md)）。
+从 [Releases](https://github.com/curtainsmall/dghub-sdk-toolkit/releases) 下载 `dghub-sdk-studio-setup.exe` 安装（每用户，无需管理员）。安装后：开始菜单「DGHub SDK Studio」启动 GUI；安装目录已入 PATH，CI 可用 `dgstudio-cli build`（只读构建，详见 [Studio CLI 文档](docs/packer-cli.md)）。旧版（DGHub SDK Packer）配置会在安装时自动迁移，并可选清理旧配置目录。
 
 ### 从源码运行
 

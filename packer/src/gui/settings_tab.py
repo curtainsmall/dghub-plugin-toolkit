@@ -167,7 +167,7 @@ class SettingsTab(ctk.CTkFrame):
             row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
 
         labels = [
-            ("应用名称", "DGHub SDK Toolkit — Packer"),
+            ("应用名称", "DGHub SDK Studio"),
             ("版本", APP_VERSION),
         ]
         for i, (k, v) in enumerate(labels, 1):
@@ -492,7 +492,7 @@ class SettingsTab(ctk.CTkFrame):
                                    command=self._on_download)
 
     def _on_install(self, dest) -> None:
-        """点击「安装更新」：启动 installer 后关闭 Packer。"""
+        """点击「安装更新」：启动 installer 后关闭 Studio。"""
         if not dest.is_file():
             self._update_status.configure(text="安装包缺失，请重新下载",
                                           text_color="red")

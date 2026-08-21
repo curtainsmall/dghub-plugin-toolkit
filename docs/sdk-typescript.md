@@ -15,7 +15,7 @@
 - [错误处理](#错误处理)
 - [手动接入（调试）](#手动接入调试)
 - [构建与测试](#构建与测试)
-- [附录：Packer 如何读取 Node.js 项目结构](#附录packer-如何读取-nodejs-项目结构)
+- [附录：Studio 如何读取 Node.js 项目结构](#附录packer-如何读取-nodejs-项目结构)
 
 ---
 
@@ -78,7 +78,7 @@ const icon = join(pluginRoot(), "assets", "icon.png");   // 资源统一相对�
 ```
 
 `manifestDir` 构造参数解析：显式传入（相对以调用方文件目录为基准）>
-环境变量 `DGHUB_MANIFEST_DIR`（Packer 调试注入）> 缺省 `pluginRoot()`。
+环境变量 `DGHUB_MANIFEST_DIR`（Studio 调试注入）> 缺省 `pluginRoot()`。
 手动运行源码且插件根无 manifest.json 时握手失败（manifest 是构建产物）。
 
 ## 配置监听
@@ -204,25 +204,25 @@ npm run build     # tsc 编译到 dist/
 npm test          # node:test 单元测试
 ```
 
-## 附录：Packer 如何读取 Node.js 项目结构
+## 附录：Studio 如何读取 Node.js 项目结构
 
-Packer 的 Node.js 编译系统（Node.js (npm + SEA)）按 **`package.json` +
+Studio 的 Node.js 编译系统（Node.js (npm + SEA)）按 **`package.json` +
 根目录 `tsconfig.json`** 的生态约定读取项目，**无需任何额外配置文件**
 （不需要 `sea-config.json` 或 `tsconfig.build.json`）。
 
 ### 入口声明
 
 插件入口由 `package.json` 的 `main` 字段声明（缺省 `index.js`）。
-该声明仅供 Packer 使用（构建与调试时读取），SDK 运行时不需要：
+该声明仅供 Studio 使用（构建与调试时读取），SDK 运行时不需要：
 
 ```json
 { "main": "dist/main.js" }
 ```
 
 TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存在——
-只要插件根目录有 `tsconfig.json`，Packer 即视为 TS 项目并放行。
+只要插件根目录有 `tsconfig.json`，Studio 即视为 TS 项目并放行。
 
-### 构建流程（Packer 自动执行）
+### 构建流程（Studio 自动执行）
 
 1. **安装依赖**：`npm install --no-audit --no-fund`（在插件目录执行）
 2. **编译**（根目录存在 `tsconfig.json` 时）：
@@ -242,7 +242,7 @@ TS 项目的入口通常是 tsc 产物（如 `dist/main.js`），构建前不存
 
 ### 依赖管理：以 npm 为准
 
-Packer 构建一律执行 `npm install`，不感知 yarn / pnpm：
+Studio 构建一律执行 `npm install`，不感知 yarn / pnpm：
 
 - **锁文件**：只认 `package-lock.json`；项目存在 `yarn.lock` /
   `pnpm-lock.yaml` 时会被忽略，npm 按 `package.json` 重新解析——构建
@@ -252,7 +252,7 @@ Packer 构建一律执行 `npm install`，不感知 yarn / pnpm：
 - 本地开发用 yarn / pnpm 没有问题，但**发布构建的依赖以 npm 解析结果为准**，
   建议按 npm 语义验证后再发布
 
-Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.yaml`。
+Studio 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.yaml`。
 
 ### 产物布局
 
@@ -271,7 +271,7 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 
 ```
 .node/<插件名>/
-├── bootstrap.py    # 启动脚本（.py 入口，Packer 生成）
+├── bootstrap.py    # 启动脚本（.py 入口，Studio 生成）
 ├── node_modules/    # 依赖（构建时 npm install 的全量拷贝）
 └── <入口目录>/      # 入口所在目录（入口在根则只收入口文件）
 ```
@@ -285,12 +285,12 @@ Packer 只管理、不接管：不会改动项目的 `yarn.lock` / `pnpm-lock.ya
 
 - **为什么不使用项目的 `sea-config.json`**：SEA 单文件特性（`assets`
   内嵌资源、`useCodeCache`、自定义 `main`）在目录式分发布局下均不生效——
-  资源本就随入口目录分发（`fs` 即可读取），`main` 必须为 Packer 引导器。
-  Packer 构建使用自己的临时 `sea-config.packer.json`（构建后删除），
+  资源本就随入口目录分发（`fs` 即可读取），`main` 必须为 Studio 引导器。
+  Studio 构建使用自己的临时 `sea-config.packer.json`（构建后删除），
   不读取项目中的 `sea-config.json`，可忽略
 - 自定义编译流程（如 `tsc -p tsconfig.build.json`、bundler）→ 写进
-  `scripts.build`，Packer 原样执行 `npm run build`
-- 不想要脚本介入 → 删除 `scripts.build`，Packer 直接执行 `npx tsc`
+  `scripts.build`，Studio 原样执行 `npm run build`
+- 不想要脚本介入 → 删除 `scripts.build`，Studio 直接执行 `npx tsc`
 
 ---
 
