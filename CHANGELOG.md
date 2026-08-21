@@ -7,6 +7,33 @@
 版本号为 toolkit 发布批次号，Studio 与 SDK 统一使用；SDK 仅在自身有变更
 的批次发布至 PyPI（Python）与 npm（TypeScript）。
 
+## [0.16.1] - 2026-08-21
+
+### 修复
+
+- **CI**：workflow artifact 命名统一并修复下载名不匹配——上传/下载
+  一致使用 kebab-case（`dghub-sdk-studio-<tag>` 安装器 /
+  `dghub-sdk-py-<tag>` Python wheel / `dghub-sdk-ts-<tag>` TS 包）；
+  v0.16.0 时上传为 `DGHubSDKStudio-<tag>` 而下载仍找
+  `DGHubSDKPacker-<tag>`，release job 报 Artifact not found；v0.16.0
+  的 GitHub Release 需手动补建（SDK 已发布故不重写 tag）
+- **SDK (Python)**：`Agent._invoke` 的 DEVICE_INFO 分发改为局部变量
+  收窄——根级 pyright 首次扫描暴露的 4 个类型错误清零
+
+### 变更
+
+- **SDK (Python)**：`Codec` 构建消息与 `parse` 匹配的裸 op 字符串
+  统一为 `OpCode` 枚举（9 处构建 + 6 处匹配 + pong）——op 单一来源，
+  杜绝拼写漂移；协议值不变
+- **SDK (TypeScript)**：`codec.ts` 与 `agent.ts` 同步 op 枚举化
+  （与 Python SDK 对称，协议值一致）
+- **CI**：SDK 发布（PyPI / npm）改为依赖 GitHub Release 成功——
+  release 失败则 SDK 不发布（同批次 all-or-none；此前 build 成功即
+  发布，v0.16.0 出现 SDK 已发而 Release 缺失）
+- **仓库**：根级 `pyrightconfig.json` 与 `.vscode/settings.json`——
+  IDE 从仓库根打开时 `studio/src`（backend/gui/cli）与 `dghub_sdk`
+  及 SDK 第三方依赖（websockets 等）可解析
+
 ## [0.16.0] - 2026-08-20
 
 ### ⚠️ 破坏性变更
