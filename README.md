@@ -31,9 +31,7 @@ with dghub_sdk.Agent() as agent:
 
 ### TypeScript
 
-位于 `sdk/typescript/`。事件驱动 API——`Agent` 继承 `EventEmitter`，
-消息到达即触发 `AgentEvent.*` 事件，无需手动 `poll()`；构造参数
-`on*` 回调仍然可用（等价于事件注册）。
+位于 `sdk/typescript/`。
 
 ```bash
 npm install dghub-sdk
