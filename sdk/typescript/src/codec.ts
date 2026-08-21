@@ -72,7 +72,7 @@ export class Codec {
     if (typeof manifest !== "object" || manifest === null) {
       throw new TypeError("manifest must be an object");
     }
-    return JSON.stringify({ op: "hello", token, manifest });
+    return JSON.stringify({ op: OpCode.HELLO, token, manifest });
   }
 
   /** 构建统一触发消息。action 包含波形（BOTH / WAVEFORM）且 preset 为空时抛错。 */
@@ -82,7 +82,7 @@ export class Codec {
       throw new Error("preset is required when action includes waveform");
     }
     const msg: Record<string, unknown> = {
-      op: "trigger",
+      op: OpCode.TRIGGER,
       action: action,
       delta_pct: options.deltaPct ?? 0,
       strength_mode: options.strengthMode ?? StrengthMode.ROLLBACK,
@@ -108,7 +108,7 @@ export class Codec {
       throw new Error("name is required");
     }
     const msg: Record<string, unknown> = {
-      op: "event",
+      op: OpCode.EVENT,
       label,
       name,
       duration: options.duration ?? 1.0,
@@ -130,7 +130,7 @@ export class Codec {
     if (!preset) {
       throw new Error("preset is required");
     }
-    const msg: Record<string, unknown> = { op: "pulse", preset, channel };
+    const msg: Record<string, unknown> = { op: OpCode.PULSE, preset, channel };
     putIfNotNull(msg, "target_id", targetId);
     return JSON.stringify(msg);
   }
@@ -140,7 +140,7 @@ export class Codec {
     if (!Number.isInteger(pct) || pct < 0 || pct > 100) {
       throw new Error("pct must be 0-100");
     }
-    const msg: Record<string, unknown> = { op: "set_strength", channel, pct };
+    const msg: Record<string, unknown> = { op: OpCode.SET_STRENGTH, channel, pct };
     putIfNotNull(msg, "target_id", targetId);
     return JSON.stringify(msg);
   }
@@ -150,7 +150,7 @@ export class Codec {
     if (!Number.isInteger(deltaPct) || deltaPct < -100 || deltaPct > 100) {
       throw new Error("delta_pct must be -100 to 100");
     }
-    const msg: Record<string, unknown> = { op: "adjust_strength", channel, delta_pct: deltaPct };
+    const msg: Record<string, unknown> = { op: OpCode.ADJUST_STRENGTH, channel, delta_pct: deltaPct };
     putIfNotNull(msg, "target_id", targetId);
     return JSON.stringify(msg);
   }
@@ -160,17 +160,17 @@ export class Codec {
     if (typeof fields !== "object" || fields === null) {
       throw new TypeError("fields must be an object");
     }
-    return JSON.stringify({ op: "status", fields });
+    return JSON.stringify({ op: OpCode.STATUS, fields });
   }
 
   /** 构建日志消息。 */
   static log(level: LogLevel, message: string): string {
-    return JSON.stringify({ op: "log", level, message });
+    return JSON.stringify({ op: OpCode.LOG, level, message });
   }
 
   /** 构建 set_config 消息，用于持久化运行时数据。 */
   static setConfig(key: string, value: unknown): string {
-    return JSON.stringify({ op: "set_config", key, value });
+    return JSON.stringify({ op: OpCode.SET_CONFIG, key, value });
   }
 
   /** 将 JSON 字符串解析为类型化的 CodecMessage。 */
@@ -178,16 +178,16 @@ export class Codec {
     const data = JSON.parse(raw) as Record<string, unknown>;
     const op = data.op as string;
     switch (op) {
-      case "hello_ack": {
+      case OpCode.HELLO_ACK: {
         const fields: Record<string, unknown> = { ...data };
         delete fields.op;
         return { op: OpCode.HELLO_ACK, data: fields };
       }
-      case "config":
+      case OpCode.CONFIG:
         return { op: OpCode.CONFIG, data: (data.data ?? {}) as Record<string, unknown> };
-      case "config_changed":
+      case OpCode.CONFIG_CHANGED:
         return { op: OpCode.CONFIG_CHANGED, key: data.key as string, value: data.value as boolean | number | string };
-      case "device_info":
+      case OpCode.DEVICE_INFO:
         return {
           op: OpCode.DEVICE_INFO,
           connected: data.connected as boolean,
@@ -195,9 +195,9 @@ export class Codec {
           maxStrengthA: data.max_strength_a as number,
           maxStrengthB: data.max_strength_b as number,
         };
-      case "ping":
+      case OpCode.PING:
         return { op: OpCode.PING, t: data.t as number };
-      case "stop":
+      case OpCode.STOP:
         return { op: OpCode.STOP, reason: data.reason as string };
       default:
         throw new Error(`Unknown op: ${op}`);

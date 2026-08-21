@@ -424,7 +424,7 @@ export class Agent extends EventEmitter {
         }
         if (msg.op === OpCode.PING) {
           try {
-            ws.send(JSON.stringify({ op: "pong", t: msg.t }));
+            ws.send(JSON.stringify({ op: OpCode.PONG, t: msg.t }));
           } catch {
             // 连接可能已关闭
           }
