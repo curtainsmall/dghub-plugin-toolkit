@@ -1,4 +1,4 @@
-﻿"""异步 WebSocket 连接管理器 —— 对外提供完全同步的 API。
+"""异步 WebSocket 连接管理器 —— 对外提供完全同步的 API。
 
 将整个异步生命周期封装在后台线程中。收到的服务端消息会先进入队列，
 在用户线程调用 ``poll()`` 时再分发到各回调。
@@ -570,7 +570,7 @@ class Agent:
                 break
             msg = Codec.parse(raw)
             if msg.op == OpCode.PING:
-                pong = json.dumps({"op": "pong", "t": msg.t})
+                pong = json.dumps({"op": OpCode.PONG.value, "t": msg.t})
                 await self._ws.send(pong)
                 self._queue.put(msg)
             else:
@@ -595,16 +595,16 @@ class Agent:
                 if self.on_config_changed:
                     self.on_config_changed(msg.key or "", msg.value)
             case OpCode.DEVICE_INFO:
-                if self.on_device_info and all(
-                    v is not None for v in (
-                        msg.connected, msg.device_type,
-                        msg.max_strength_a, msg.max_strength_b,
-                    )
-                ):
-                    self.on_device_info(
-                        msg.connected, msg.device_type,
-                        msg.max_strength_a, msg.max_strength_b,
-                    )
+                if self.on_device_info is not None:
+                    connected = msg.connected
+                    dev_type = msg.device_type
+                    max_a = msg.max_strength_a
+                    max_b = msg.max_strength_b
+                    if connected is not None and dev_type is not None \
+                            and max_a is not None and max_b is not None:
+                        self.on_device_info(
+                            connected, dev_type, max_a, max_b,
+                        )
             case OpCode.STOP:
                 if self.on_stop:
                     self.on_stop(msg.reason or "")

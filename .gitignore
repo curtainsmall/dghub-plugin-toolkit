@@ -7,10 +7,12 @@
 !README.md
 !CHANGELOG.md
 !LICENSE
+!pyrightconfig.json
 
 # Source directories
 !.github/
 !.github/**
+!.vscode/settings.json
 !studio/
 !studio/**
 !sdk/

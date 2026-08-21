@@ -51,7 +51,7 @@ class Codec:
         if not isinstance(manifest, dict):
             raise TypeError("manifest must be a dict")
         return json.dumps({
-            "op": "hello",
+            "op": OpCode.HELLO.value,
             "token": token,
             "manifest": manifest,
         })
@@ -79,7 +79,7 @@ class Codec:
         if action in (Action.BOTH, Action.WAVEFORM) and not preset:
             raise ValueError("preset is required when action includes waveform")
         msg: dict[str, Any] = {
-            "op": "trigger",
+            "op": OpCode.TRIGGER.value,
             "action": action.value,
             "delta_pct": delta_pct,
             "strength_mode": strength_mode.value,
@@ -120,7 +120,7 @@ class Codec:
         if not name:
             raise ValueError("name is required")
         msg: dict[str, Any] = {
-            "op": "event",
+            "op": OpCode.EVENT.value,
             "label": label,
             "name": name,
             "duration": duration,
@@ -150,7 +150,7 @@ class Codec:
         if not preset:
             raise ValueError("preset is required")
         msg = {
-            "op": "pulse",
+            "op": OpCode.PULSE.value,
             "preset": preset,
             "channel": channel.value,
         }
@@ -168,7 +168,7 @@ class Codec:
         if not 0 <= pct <= 100:
             raise ValueError("pct must be 0-100")
         msg = {
-            "op": "set_strength",
+            "op": OpCode.SET_STRENGTH.value,
             "channel": channel.value,
             "pct": pct,
         }
@@ -186,7 +186,7 @@ class Codec:
         if not -100 <= delta_pct <= 100:
             raise ValueError("delta_pct must be -100 to 100")
         msg = {
-            "op": "adjust_strength",
+            "op": OpCode.ADJUST_STRENGTH.value,
             "channel": channel.value,
             "delta_pct": delta_pct,
         }
@@ -200,7 +200,7 @@ class Codec:
         if not isinstance(fields, dict):
             raise TypeError("fields must be a dict")
         return json.dumps({
-            "op": "status",
+            "op": OpCode.STATUS.value,
             "fields": fields,
         })
 
@@ -208,7 +208,7 @@ class Codec:
     def log(level: LogLevel, message: str) -> str:
         """构建日志消息。"""
         return json.dumps({
-            "op": "log",
+            "op": OpCode.LOG.value,
             "level": level.value,
             "message": message,
         })
@@ -217,7 +217,7 @@ class Codec:
     def set_config(key: str, value: Any) -> str:
         """构建 set_config 消息，用于持久化运行时数据。"""
         return json.dumps({
-            "op": "set_config",
+            "op": OpCode.SET_CONFIG.value,
             "key": key,
             "value": value,
         })
@@ -227,23 +227,23 @@ class Codec:
         """将 JSON 字符串解析为类型化的 ``CodecMessage`` 数据类。"""
         data = json.loads(raw)
         match data:
-            case {"op": "hello_ack"} as ack:
+            case {"op": OpCode.HELLO_ACK} as ack:
                 ack_fields = {k: v for k, v in ack.items() if k != "op"}
                 return CodecMessage(op=OpCode.HELLO_ACK, data=ack_fields)
-            case {"op": "config", "data": d}:
+            case {"op": OpCode.CONFIG, "data": d}:
                 return CodecMessage(op=OpCode.CONFIG, data=d)
-            case {"op": "config_changed", "key": k, "value": v}:
+            case {"op": OpCode.CONFIG_CHANGED, "key": k, "value": v}:
                 return CodecMessage(op=OpCode.CONFIG_CHANGED, key=k, value=v)
-            case {"op": "device_info", "connected": c,
+            case {"op": OpCode.DEVICE_INFO, "connected": c,
                   "device_type": dt, "max_strength_a": ma, "max_strength_b": mb}:
                 return CodecMessage(
                     op=OpCode.DEVICE_INFO, connected=c,
                     device_type=DeviceType(dt),
                     max_strength_a=ma, max_strength_b=mb,
                 )
-            case {"op": "ping", "t": t}:
+            case {"op": OpCode.PING, "t": t}:
                 return CodecMessage(op=OpCode.PING, t=t)
-            case {"op": "stop", "reason": r}:
+            case {"op": OpCode.STOP, "reason": r}:
                 return CodecMessage(op=OpCode.STOP, reason=r)
             case _:
                 raise ValueError(f"Unknown op: {data.get('op')}")
