@@ -1,0 +1,11 @@
+{
+  // 仓库根级解析配置（IDE 从根打开时生效）：
+  // studio 的 backend/gui/cli 在 studio/src 下（非标准包布局），
+  // SDK Python 为顶层包（sdk/python/dghub_sdk）——两者都不在默认
+  // 搜索路径，此处显式补充，消除 "Import could not be resolved"。
+  // 注意：studio 目录内 pyright CLI 仍优先读 studio/pyproject.toml。
+  "extraPaths": [
+    "studio/src",
+    "sdk/python"
+  ]
+}

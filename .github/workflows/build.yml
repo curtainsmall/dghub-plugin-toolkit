@@ -97,7 +97,7 @@ jobs:
       - name: Upload installer as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DGHubSDKStudio-${{ github.ref_name }}
+          name: dghub-sdk-studio-${{ github.ref_name }}
           path: studio/installer/dghub-sdk-studio-setup.exe
 
   build-sdk-py:
@@ -128,7 +128,7 @@ jobs:
       - name: Upload SDK wheel
         uses: actions/upload-artifact@v4
         with:
-          name: dghub-sdk-${{ github.ref_name }}
+          name: dghub-sdk-py-${{ github.ref_name }}
           path: sdk/python/dist/*
 
   build-sdk-ts:
@@ -178,10 +178,10 @@ jobs:
       - name: Checkout (for CHANGELOG.md)
         uses: actions/checkout@v4
 
-      - name: Download Packer installer artifact
+      - name: Download Studio installer artifact
         uses: actions/download-artifact@v4
         with:
-          name: DGHubSDKPacker-${{ github.ref_name }}
+          name: dghub-sdk-studio-${{ github.ref_name }}
           path: release-files
 
       - name: Strip tag prefix
@@ -216,14 +216,15 @@ jobs:
           files: release-files/*
 
   publish-pypi:
-    needs: [detect-changes, build-sdk-py]
+    # SDK 发布依赖 release 成功（release 失败则跳过——同批次 all-or-none）
+    needs: [detect-changes, build-sdk-py, release]
     runs-on: ubuntu-latest
 
     steps:
       - name: Download SDK artifact
         uses: actions/download-artifact@v4
         with:
-          name: dghub-sdk-${{ github.ref_name }}
+          name: dghub-sdk-py-${{ github.ref_name }}
           path: dist
 
       - name: Publish to PyPI
@@ -233,7 +234,8 @@ jobs:
           skip-existing: true  # 重放同 tag：已发布文件跳过（PyPI 不可变）
 
   publish-npm:
-    needs: [detect-changes, build-sdk-ts]
+    # SDK 发布依赖 release 成功（release 失败则跳过——同批次 all-or-none）
+    needs: [detect-changes, build-sdk-ts, release]
     runs-on: ubuntu-latest
 
     steps:
