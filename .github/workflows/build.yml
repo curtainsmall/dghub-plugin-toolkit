@@ -178,10 +178,10 @@ jobs:
       - name: Checkout (for CHANGELOG.md)
         uses: actions/checkout@v4
 
-      - name: Download Packer installer artifact
+      - name: Download Studio installer artifact
         uses: actions/download-artifact@v4
         with:
-          name: DGHubSDKPacker-${{ github.ref_name }}
+          name: DGHubSDKStudio-${{ github.ref_name }}
           path: release-files
 
       - name: Strip tag prefix
